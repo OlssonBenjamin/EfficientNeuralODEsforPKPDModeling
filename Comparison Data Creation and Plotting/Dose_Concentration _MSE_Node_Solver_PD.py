@@ -267,7 +267,7 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('Node_no_jump_Dose_Size_MSE_pd_s_05_4',np.array(mse_list))
+np.save('node_dose_size_MSE_pd_1',np.array(mse_list))
 plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
 plt.xlabel('Dose Size')
 plt.ylabel('MSE of Concentration Prediction')
