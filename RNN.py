@@ -322,5 +322,5 @@ for epoch in range(epochs):
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
 
-np.save('RNN Training_Loss_5.npy', training_loss)
-np.save('RNN Validation_Loss_5.npy', validation_loss)
+np.save('RNN Training_Loss_1.npy', training_loss)
+np.save('RNN Validation_Loss_1.npy', validation_loss)
