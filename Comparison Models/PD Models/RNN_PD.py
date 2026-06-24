@@ -319,11 +319,11 @@ for epoch in range(epochs):
         print(total_loss.item())
         validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Models/rnn_no_jump_pd_6')
+        torch.save(model, 'Models/rnn_pd_1')
         best_loss = total_loss.item()
     if epoch >= 75:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
 
-np.save('RNN Training_Loss_pd_6.npy', training_loss)
-np.save('RNN Validation_Loss_pd_6.npy', validation_loss)
+np.save('RNN Training_Loss_pd_1.npy', training_loss)
+np.save('RNN Validation_Loss_pd_1.npy', validation_loss)
