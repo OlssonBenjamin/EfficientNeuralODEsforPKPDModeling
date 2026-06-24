@@ -259,7 +259,7 @@ column_names = ['Weight', 'Age', 'Sex', 'Dose Size', 'Last Dose', 'Current Conce
 
 df = pd.DataFrame(input, columns=column_names)
 
-model = torch.load('flow_matching_model_0')
+model = torch.load('flow_matching_model_1')
 
 patient_encoding_network = model.patient_encoding
 increasing_net = model.ode.increasing_net
