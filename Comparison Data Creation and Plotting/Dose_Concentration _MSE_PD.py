@@ -186,7 +186,7 @@ dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
 
-latent_ODE_1 = torch.load('Models/semi_simple_ode_euler_pd_s_05_4')
+latent_ODE_1 = torch.load('node_backprop_solver_pd_1')
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/WT_AGE_SEX_0_24_8.csv', 'Dose Size Data/PK_PD_0_24_8.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/WT_AGE_SEX_25_24_8.csv', 'Dose Size Data/PK_PD_25_24_8.csv', dose_size_2, 0)
