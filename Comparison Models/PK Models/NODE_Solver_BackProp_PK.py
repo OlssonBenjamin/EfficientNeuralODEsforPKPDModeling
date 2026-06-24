@@ -342,9 +342,9 @@ for epoch in range(epochs):
                 x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor)
                 x_hat = x_hat[mask].transpose(1,0)
                 loss = cost_func(x_hat, data_tensor)
-                total_loss += loss / (len(val_data_loaders))
+                total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         print(total_loss.item())
-        validation_loss[epoch] = total_loss.item()
+        validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
         torch.save(latent_ODE, 'node_backprop_solver_pk_1')
     if total_loss.item() < 0.75:
