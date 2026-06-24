@@ -61,13 +61,13 @@ class TrainODEFunc(nn.Module):
    def __init__(self, bottleneck):
        super(TrainODEFunc, self).__init__()
        self.increasing_net = nn.Sequential(
-           nn.Linear(bottleneck + 2, 64),
+           nn.Linear(bottleneck + 3, 64),
            nn.SiLU(),
            nn.Linear(64, 1),
            nn.Softplus()
        )
        self.decreasing_net = nn.Sequential(
-           nn.Linear(bottleneck, 64),
+           nn.Linear(bottleneck + 2, 64),
            nn.SiLU(),
            nn.Linear(64, 1),
            nn.Softplus()
@@ -85,10 +85,10 @@ class TrainODEFunc(nn.Module):
         masked_dosing_times = dosing_times * mask 
         last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
         if (last_dose >= self.peak_dose).any():
-            ode_input = torch.cat([steering_variables], dim=1)
-            dzdt = -(self.decreasing_net(ode_input)) * current_concentration * min(last_dose[0] - self.peak_dose, 1)
+            ode_input = torch.cat([steering_variables, last_dose, current_concentration], dim=1)
+            dzdt = -self.decreasing_net(ode_input)
         else:
-            ode_input = torch.cat([steering_variables, dose_size, last_dose], dim=1)
+            ode_input = torch.cat([steering_variables, last_dose, current_concentration, dose_size], dim=1)
             dzdt = self.increasing_net(ode_input)
         dzdt = torch.cat([dzdt, torch.zeros_like(steering_variables), torch.zeros_like(dosing_times), torch.zeros_like(dose_size)], dim=-1)
         return dzdt
@@ -210,13 +210,13 @@ class PKODE(nn.Module):
     def __init__(self, bottleneck, zero_dose_size):
         super(PKODE, self).__init__()
         self.increasing_net = nn.Sequential(
-           nn.Linear(bottleneck + 2, 64),
+           nn.Linear(bottleneck + 3, 64),
            nn.SiLU(),
            nn.Linear(64, 1),
            nn.Softplus()
        )
         self.decreasing_net = nn.Sequential(
-           nn.Linear(bottleneck, 64),
+           nn.Linear(bottleneck + 2, 64),
            nn.SiLU(),
            nn.Linear(64, 1),
            nn.Softplus()
@@ -235,10 +235,10 @@ class PKODE(nn.Module):
         masked_dosing_times = dosing_times * mask 
         last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
         if (last_dose >= self.peak_dose).any():
-            ode_input = torch.cat([steering_variables], dim=1)
-            dzdt = -(self.decreasing_net(ode_input)) * current_concentration * min(last_dose[0] - self.peak_dose, 1)
+            ode_input = torch.cat([steering_variables, last_dose, current_concentration], dim=1)
+            dzdt = -self.decreasing_net(ode_input)
         else:
-            ode_input = torch.cat([steering_variables, dose_size, last_dose], dim=1)
+            ode_input = torch.cat([steering_variables, last_dose, current_concentration, dose_size], dim=1)
             dzdt = self.increasing_net(ode_input)
         if (dose_size == self.zero_dose_size).any():
             dzdt = torch.zeros_like(dzdt)
@@ -458,77 +458,8 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index, pk_model,
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
     check_time_tensor = torch.tensor(sampled_patient_data[0, 0, :], dtype=torch.float32)
 
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    # --- Style ---
-    fig.patch.set_facecolor('#ffffff')
-    ax.set_facecolor('#ffffff')
-
-    # Grid
-    ax.grid(color='#000000', linestyle='--', linewidth=0.4, alpha=0.15)
-    ax.set_axisbelow(True)
-
-    # Prediction line (smooth)
-    ax.plot(
-        full_time_tensor,
-        all_patient_data[27, 1, :],
-        color='#1a6fcc',
-        linewidth=2,
-        alpha=0.95,
-        label='Prediction $\\hat{x}$',
-        zorder=3
-    )
-
-    """ # Subtle fill under the prediction curve
-    ax.fill_between(
-        full_time_tensor,
-        all_patient_data[27, 1, :],
-        alpha=0.08,
-        color='#1a6fcc',
-        zorder=2
-    ) """
-
-    # Training data scatter
-    ax.scatter(
-        check_time_tensor,
-        sampled_patient_data[27, 1, :],
-        color='#e03c3c',
-        s=30,
-        alpha=0.85,
-        zorder=4,
-        label='Training Data Points',
-        edgecolors='#c02020',
-        linewidths=0.5
-    )
-
-    # --- Labels & Title ---
-    ax.set_title(f'Training Data Points vs. Full Simulated PD Trajectory', color='#111111', fontsize=14, fontweight='bold', pad=14)
-    ax.set_xlabel('Time', color='#333333', fontsize=11)
-    ax.set_ylabel('Value', color='#333333', fontsize=11)
-
-    ax.tick_params(colors='#444444', labelsize=9)
-    for spine in ax.spines.values():
-        spine.set_edgecolor('#cccccc')
-
-    # --- Legend ---
-    ax.legend(
-        frameon=True,
-        facecolor='#f9f9f9',
-        edgecolor='#cccccc',
-        labelcolor='#222222',
-        fontsize=10,
-        loc='lower right'
-    )
-
-    plt.tight_layout()
-    if dose_regime_index == 1:
-        plt.savefig(f'Train_Sim_PD.png', dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
-        plt.show()
-        plt.close()
-
     with torch.no_grad():
-        if dose_size >= 10:
+        if dose_size >= 0:
             covariates = torch.tensor(sampled_patient_data[:, 2:6, 0]).to(torch.float32)
             dosing_times = dose_times.expand(covariates.size(0), dose_times.size(0))
             cp_predictions = pk_model.solve(covariates, dosing_times, full_time_tensor).transpose(0, 1).squeeze()
@@ -630,8 +561,7 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
-#pk_model = torch.load('flow_matching_model_exponential_polynomial_1')
-pk_model = 0
+pk_model = torch.load('flow_matching_model_1')
 
 all_patient_data_1, cp_predictions_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0, pk_model, dose_times_1)
 all_patient_data_2, cp_predictions_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1, pk_model, dose_times_2)
