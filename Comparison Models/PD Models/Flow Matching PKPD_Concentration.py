@@ -11,7 +11,7 @@ import copy
 
 def load_parameters_into_model(model, param_vector):
     """
-    Given a 1D param_vector sampled from SWAG (or any other method),
+    Given a 1D param_vector,
     load it back into the model's parameters in the correct shapes.
     """
     # We'll build a fresh state_dict whose tensor shapes match the original model.
@@ -36,59 +36,6 @@ def load_parameters_into_model(model, param_vector):
     
     # Finally, load our new state_dict into the model
     model.load_state_dict(new_state_dict)
-
-class SWAGTracker:
-    """
-    Tracks model parameter snapshots for SWAG, then computes
-    mean & covariance for an approximate Gaussian posterior.
-    """
-    def __init__(self):
-        self.snapshots = []
-        self.mean_param = None
-        self.cov_param = None
-    def collect_model(self, model):
-        """Store a deep-copied state_dict of the model."""
-        self.snapshots.append(copy.deepcopy(model.state_dict()))
-    def finalize(self):
-        """
-        Compute mean and covariance (as a full matrix) from snapshots.
-        For large models or many snapshots, consider diagonal or low-rank approximations.
-        """
-        if len(self.snapshots) == 0:
-            raise ValueError("No snapshots collected for SWAG.")
-        # Flatten each snapshot into a single vector
-        # We'll store them in a list of [num_params]-dim tensors
-        param_vectors = []
-        for state_dict in self.snapshots:
-            vec = []
-            for param_tensor in state_dict.values():
-                vec.append(param_tensor.view(-1))  # flatten each parameter
-            vec = torch.cat(vec)
-            param_vectors.append(vec.unsqueeze(0))
-        # Shape: (num_snapshots, num_params)
-        param_matrix = torch.cat(param_vectors, dim=0)
-        # Mean
-        self.mean_param = param_matrix.mean(dim=0)  # shape [num_params]
-        # Covariance
-        centered = param_matrix - self.mean_param.unsqueeze(0)
-        # shape: (num_snapshots, num_params)
-        self.cov_param = (centered.t() @ centered) / (len(self.snapshots) - 1)
-        # shape: (num_params, num_params)
-        # At this point self.mean_param, self.cov_param store the SWAG approximation
-        return self.mean_param, self.cov_param
-    def sample(self):
-        """
-        Sample a parameter vector from the SWAG distribution ~ N(mean, cov).
-        This can be expensive for large param sizes if cov is full-rank.
-        """
-        if self.mean_param is None or self.cov_param is None:
-            raise ValueError("Call finalize() before sampling.")
-        num_params = self.mean_param.shape[0]
-        # Sample from a multivariate normal
-        eps = torch.randn(num_params)
-        L = torch.linalg.cholesky(self.cov_param)  # or use a low-rank approximation
-        sample_vec = self.mean_param + L @ eps
-        return sample_vec
 
 class PatientDataset(Dataset):
     def __init__(self, data, cp_predictions):
@@ -683,7 +630,7 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
-#pk_model = torch.load('flow_matching_model_swag_exponential_polynomial_1')
+#pk_model = torch.load('flow_matching_model_exponential_polynomial_1')
 pk_model = 0
 
 all_patient_data_1, cp_predictions_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0, pk_model, dose_times_1)
@@ -726,7 +673,6 @@ train_loss_func = torch.nn.MSELoss(reduction='sum')
 training_loss = np.zeros(epochs)
 validation_loss = np.zeros(epochs)
 length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(all_patient_data_3)
-swag_tracker = SWAGTracker()
 
 
 
@@ -796,8 +742,6 @@ for epoch in range(epochs):
             train_loss += loss
     if epoch == 2000:
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-3)
-    if epoch >= 2000 and epoch %  10 == 0:
-        swag_tracker.collect_model(model)
     training_loss[epoch] = train_loss / (length_training_data * len(full_time_tensor))
     with torch.no_grad():
         total_loss = 0
@@ -826,8 +770,4 @@ for epoch in range(epochs):
             print(f'Validation Loss: {total_loss.item()}')
             if total_loss.item() < best_loss:
                 best_loss = total_loss.item()
-                torch.save(model, 'flow_matching_pkpd_concentration_20')
-
-mean, cov = swag_tracker.finalize()
-torch.save(mean, 'swag_mean_pkpd_20.pth')
-torch.save(cov, 'swag_cov_pkpd_20.pth')
+                torch.save(model, 'flow_matching_pkpd_concentration_1')
