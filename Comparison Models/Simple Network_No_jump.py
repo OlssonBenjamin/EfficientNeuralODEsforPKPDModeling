@@ -316,5 +316,5 @@ for epoch in range(epochs):
     if epochs >= 250:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
-np.save('No Jump Data/MLP No Jump Training_Loss_pd_5.npy', training_loss)
-np.save('No Jump Data/MLP No Jump Validation_Loss_pd_5.npy', validation_loss)
+np.save('MLP_Training_Loss_pd_1.npy', training_loss)
+np.save('MLP_Validation_Loss_pd_1.npy', validation_loss)
