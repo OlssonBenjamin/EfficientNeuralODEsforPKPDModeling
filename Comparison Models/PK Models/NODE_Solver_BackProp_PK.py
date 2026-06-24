@@ -292,6 +292,9 @@ epochs = 300
 optimizer = torch.optim.Adam(latent_ODE.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
+train_loss_func = torch.nn.MSELoss(reduction='sum')
+training_loss = np.zeros(epochs)
+validation_loss = np.zeros(epochs)
 
 for epoch in range(epochs):
     random.shuffle(train_dataloaders)
@@ -312,6 +315,7 @@ for epoch in range(epochs):
                 dose_time_input = dose_times_3.expand((batch.size(0), len(dose_times_3))).reshape((batch.size(0), len(dose_times_3)))
             x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor)
             x_hat = x_hat[mask].transpose(1,0)
+            train_loss += train_loss_func(x_hat, data_tensor)
             loss = cost_func(x_hat, data_tensor)
             if torch.any(loss.isnan()):
                 loss = torch.tensor(100, dtype=torch.float32)
@@ -319,6 +323,7 @@ for epoch in range(epochs):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(latent_ODE.parameters(), max_norm=1.0)
             optimizer.step()
+    training_loss[epoch] = train_loss / (length_training_data * len(full_time_tensor)) 
     with torch.no_grad():
         total_loss = 0
         for val_dataloader in val_data_loaders:
@@ -339,8 +344,9 @@ for epoch in range(epochs):
                 loss = cost_func(x_hat, data_tensor)
                 total_loss += loss / (len(val_data_loaders))
         print(total_loss.item())
+        validation_loss[epoch] = total_loss.item()
     if total_loss.item() < best_loss:
-        torch.save(latent_ODE, 'node_original_1')
+        torch.save(latent_ODE, 'node_backprop_solver_pk_1')
     if total_loss.item() < 0.75:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
