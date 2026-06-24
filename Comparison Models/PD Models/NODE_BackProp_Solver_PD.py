@@ -342,7 +342,7 @@ for epoch in range(epochs):
     np.save('Node Training_Loss_pd_1.npy', training_loss)
     np.save('Node Validation_Loss_pd_1.npy', validation_loss)
     if total_loss.item() < best_loss:
-        torch.save(model, 'node_pd_1')
+        torch.save(model, 'node_backprop_solver_pd_1')
         best_loss = total_loss.item()
     if epoch >= 75:
         for param_group in optimizer.param_groups:
