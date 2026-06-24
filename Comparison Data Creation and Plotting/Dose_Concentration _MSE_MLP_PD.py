@@ -165,7 +165,7 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Models/mlp_no_jump_pd_1')
+model = torch.load('Models/mlp_pd_1')
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print(num_params)
@@ -241,21 +241,9 @@ for data_loader in val_data_loaders:
         x_hat = model(covariate_input, dose_time_input, full_time_tensor)
         x_hat = x_hat[val_mask].transpose(1,0)
         x_hat = x_hat.detach().squeeze()
-        plt.plot(full_time_tensor[val_mask], x_hat[15, :])
-        plt.plot(full_time_tensor[val_mask], data_tensor[15, :])
-        title = 'Jump Neural ODE ' + str(batch[0, 6, 0].item())
-        plt.title(title)
-        title = 'doseplots/jump_neural_ode_' + str(int(batch[0, 5, 0].item()))
-        plt.show() 
         loss = cost_func(x_hat, data_tensor)
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
 np.save('SimpleNet_No_Jump_Dose_Size_MSE_pd_1',np.array(mse_list))
-plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
-plt.xlabel('Dose Size')
-plt.ylabel('MSE of Concentration Prediction')
-plt.legend()
-#plt.savefig('MSE vs Concentration Final')
-plt.show()
-print()
+
