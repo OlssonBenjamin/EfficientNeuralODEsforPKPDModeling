@@ -340,88 +340,10 @@ for epoch in range(epochs):
                 total_loss += loss / (len(val_data_loaders))
         print(total_loss.item())
     if total_loss.item() < best_loss:
-        torch.save(latent_ODE, '1_dimension_euler_batched')
+        torch.save(latent_ODE, 'node_original_1')
     if total_loss.item() < 0.75:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
     if total_loss.item() < best_loss:
-        if total_loss < 0.75:
-            batch_index = 0
-            for val_dataloader in val_data_loaders:
-                for batch in val_dataloader:
-                    if batch_index == 1:
-                        covariate_input = batch[:, 2:6, 0]
-                        covariate_input = covariate_input.to(torch.float32)
-                        data_tensor = batch[:, 1, :].to(torch.float32)
-                        dose_time_input = dose_times_2.expand((batch.size(0), len(dose_times_2)))
-                        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).transpose(0, 1).squeeze()
-                        for z in range(25):
-                            fig, ax = plt.subplots(figsize=(10, 5))
-
-                            # --- Style ---
-                            fig.patch.set_facecolor('#ffffff')
-                            ax.set_facecolor('#ffffff')
-
-                            # Grid
-                            ax.grid(color='#000000', linestyle='--', linewidth=0.4, alpha=0.15)
-                            ax.set_axisbelow(True)
-
-                            # Prediction line (smooth)
-                            ax.plot(
-                                full_time_tensor,
-                                x_hat.detach()[z, :],
-                                color='#1a6fcc',
-                                linewidth=2,
-                                alpha=0.95,
-                                label='Prediction $\\hat{x}$',
-                                zorder=3
-                            )
-
-                            # Subtle fill under the prediction curve
-                            ax.fill_between(
-                                full_time_tensor,
-                                x_hat.detach()[z, :],
-                                alpha=0.08,
-                                color='#1a6fcc',
-                                zorder=2
-                            )
-
-                            # Training data scatter
-                            ax.scatter(
-                                full_time_tensor[mask],
-                                data_tensor.squeeze()[z, :],
-                                color='#e03c3c',
-                                s=30,
-                                alpha=0.85,
-                                zorder=4,
-                                label='Validation Data',
-                                edgecolors='#c02020',
-                                linewidths=0.5
-                            )
-
-                            # --- Labels & Title ---
-                            ax.set_title(f'Neural ODE Predictions on Test Data', color='#111111', fontsize=14, fontweight='bold', pad=14)
-                            ax.set_xlabel('Time', color='#333333', fontsize=11)
-                            ax.set_ylabel('Value', color='#333333', fontsize=11)
-
-                            ax.tick_params(colors='#444444', labelsize=9)
-                            for spine in ax.spines.values():
-                                spine.set_edgecolor('#cccccc')
-
-                            # --- Legend ---
-                            ax.legend(
-                                frameon=True,
-                                facecolor='#f9f9f9',
-                                edgecolor='#cccccc',
-                                labelcolor='#222222',
-                                fontsize=10,
-                                loc='upper right'
-                            )
-
-                            plt.tight_layout()
-                            plt.savefig(f'Test_Data_Extrapolation_nonfm{z}.png', dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
-                            plt.show()
-                            plt.close()
-                batch_index += 1
         best_loss = total_loss.item()
 
