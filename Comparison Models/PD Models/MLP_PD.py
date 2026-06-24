@@ -311,7 +311,7 @@ for epoch in range(epochs):
         print(total_loss.item())
     validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Models/mlp_no_jump_pd_5')
+        torch.save(model, 'Models/mlp_pd_1')
         best_loss = total_loss.item()
     if epochs >= 250:
         for param_group in optimizer.param_groups:
