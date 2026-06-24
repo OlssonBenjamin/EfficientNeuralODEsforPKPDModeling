@@ -9,48 +9,10 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 import copy
-import time
 
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['font.family'] = 'serif'  
-
-class SWAGTracker:
-
-    def __init__(self):
-        self.snapshots = []
-        self.mean_param = None
-        self.cov_param = None
-    def collect_model(self, model):
-        self.snapshots.append(copy.deepcopy(model.state_dict()))
-    def finalize(self):
-        if len(self.snapshots) == 0:
-            raise ValueError("No snapshots collected for SWAG.")
-        param_vectors = []
-        for state_dict in self.snapshots:
-            vec = []
-            for param_tensor in state_dict.values():
-                vec.append(param_tensor.view(-1))  
-            vec = torch.cat(vec)
-            param_vectors.append(vec.unsqueeze(0))
-        param_matrix = torch.cat(param_vectors, dim=0)
-        self.mean_param = param_matrix.mean(dim=0) 
-        centered = param_matrix - self.mean_param.unsqueeze(0)
-        self.cov_param = (centered.t() @ centered) / (len(self.snapshots) - 1)
-        return self.mean_param, self.cov_param
-    def sample(self):
-        if self.mean_param is None or self.cov_param is None:
-            raise ValueError("Call finalize() before sampling.")
-        num_params = self.mean_param.shape[0]
-
-        eps = torch.randn(num_params)
-        L = torch.linalg.cholesky(self.cov_param)  
-        sample_vec = self.mean_param + L @ eps
-        return sample_vec
-    def get_mean(self):
-        sample_vec = self.mean_param 
-        return sample_vec
-
 
 def load_parameters_into_model(model, param_vector):
     """
@@ -507,7 +469,6 @@ validation_loss = np.zeros(epochs)
 length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(all_patient_data_3)
 swag_tracker = SWAGTracker()
 
-start_time = time.time()
 for epoch in range(epochs):
     train_loss = 0
     for train_dataloader in train_dataloaders:
@@ -550,7 +511,7 @@ for epoch in range(epochs):
     if epoch >= 2001 and (num < 0.1):
         swag_tracker.collect_model(model)
     if epoch == 2000 or best_loss < 0.75:
-        #model = torch.load('flow_matching_model_swag_exponential_polynomial_11')
+        model = torch.load('flow_matching_model_complex_flow_1')
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-3)
     with torch.no_grad():
         total_loss = 0
@@ -578,90 +539,7 @@ for epoch in range(epochs):
                     if not batch[0, 6, 0] == 2:
                         total_loss += train_loss_func(x_hat, data_tensor) / (25 * 2 * data_tensor.size(-1))
             if total_loss < best_loss:
-                if total_loss < 0.75:
-                    batch_index = 0
-                    for val_dataloader in val_data_loaders:
-                        for batch in val_dataloader:
-                            if batch_index == 1:
-                                covariate_input = batch[:, 2:6, 0]
-                                #covariate_input = batch[:, -1,] = (150 - np.mean(dose_sizes)) / np.std(dose_sizes)
-                                covariate_input = covariate_input.to(torch.float32)
-                                data_tensor = batch[:, 1, :].to(torch.float32)
-                                dose_time_input = dose_times_2.expand((batch.size(0), len(dose_times_2)))
-                                x_hat = model.solve(covariate_input, dose_time_input, smooth_time_tensor).transpose(0, 1).squeeze()
-                                for z in range(25):
-                                    fig, ax = plt.subplots(figsize=(10, 5))
-
-                                    # --- Style ---
-                                    fig.patch.set_facecolor('#ffffff')
-                                    ax.set_facecolor('#ffffff')
-
-                                    # Grid
-                                    ax.grid(color='#000000', linestyle='--', linewidth=0.4, alpha=0.15)
-                                    ax.set_axisbelow(True)
-
-                                    # Prediction line (smooth)
-                                    ax.plot(
-                                        smooth_time_tensor,
-                                        x_hat.detach()[z, :],
-                                        color='#1a6fcc',
-                                        linewidth=2,
-                                        alpha=0.95,
-                                        label='Prediction $\\hat{x}$',
-                                        zorder=3
-                                    )
-
-                                    # Subtle fill under the prediction curve
-                                    """ ax.fill_between(
-                                        smooth_time_tensor,
-                                        x_hat.detach()[z, :],
-                                        alpha=0.08,
-                                        color='#1a6fcc',
-                                        zorder=2
-                                    ) """
-
-                                    # Training data scatter
-                                    ax.scatter(
-                                        full_time_tensor,
-                                        data_tensor.squeeze()[z, :],
-                                        color='#e03c3c',
-                                        s=30,
-                                        alpha=0.85,
-                                        zorder=4,
-                                        label='Validation Data',
-                                        edgecolors='#c02020',
-                                        linewidths=0.5
-                                    )
-
-                                    # --- Labels & Title ---
-                                    ax.set_title(f'Neural ODE Predictions on Test Data', color='#111111', fontsize=14, fontweight='bold', pad=14)
-                                    ax.set_xlabel('Time', color='#333333', fontsize=11)
-                                    ax.set_ylabel('Concentration (mg/L)', color='#333333', fontsize=11)
-
-                                    ax.tick_params(colors='#444444', labelsize=9)
-                                    for spine in ax.spines.values():
-                                        spine.set_edgecolor('#cccccc')
-
-                                    # --- Legend ---
-                                    ax.legend(
-                                        frameon=True,
-                                        facecolor='#f9f9f9',
-                                        edgecolor='#cccccc',
-                                        labelcolor='#222222',
-                                        fontsize=10,
-                                        loc='upper right'
-                                    )
-
-                                    plt.tight_layout()
-                                    plt.savefig(f'Test_Data_Extrapolation{z}.pdf',  bbox_inches='tight', facecolor=fig.get_facecolor())
-                        batch_index += 1
-                #torch.save(model, 'flow_matching_model_swag_exponential_polynomial_11')
+                torch.save(model, 'flow_matching_model_complex_flow_1')
                 best_loss = total_loss
             print(f'Validation Loss: {total_loss.item()}')
-""" mean, cov = swag_tracker.finalize()
-torch.save(mean, 'swag_mean_exponential_polynomial_11.pth')
-torch.save(cov, 'swag_cov_exponential_polynomial_11.pth') """
-end_time = time.time()
-execution_time = end_time - start_time
-print(f"Execution time: {execution_time:.6f} seconds")
                     
