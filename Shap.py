@@ -1,58 +1,9 @@
-import torchdiffeq as tdq
 from torchdiffeq import odeint
 import torch.nn as nn
-import torch.optim as optim
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-import random
-import copy
 import shap
-
-class SWAGTracker:
-
-    def __init__(self):
-        self.snapshots = []
-        self.mean_param = None
-        self.cov_param = None
-    def collect_model(self, model):
-        self.snapshots.append(copy.deepcopy(model.state_dict()))
-    def finalize(self):
-        if len(self.snapshots) == 0:
-            raise ValueError("No snapshots collected for SWAG.")
-        param_vectors = []
-        for state_dict in self.snapshots:
-            vec = []
-            for param_tensor in state_dict.values():
-                vec.append(param_tensor.view(-1))  
-            vec = torch.cat(vec)
-            param_vectors.append(vec.unsqueeze(0))
-        param_matrix = torch.cat(param_vectors, dim=0)
-        self.mean_param = param_matrix.mean(dim=0) 
-        centered = param_matrix - self.mean_param.unsqueeze(0)
-        self.cov_param = (centered.t() @ centered) / (len(self.snapshots) - 1)
-        return self.mean_param, self.cov_param
-    def sample(self):
-        if self.mean_param is None or self.cov_param is None:
-            raise ValueError("Call finalize() before sampling.")
-        num_params = self.mean_param.shape[0]
-
-        eps = torch.randn(num_params)
-        L = torch.linalg.cholesky(self.cov_param)  
-        sample_vec = self.mean_param + L @ eps
-        return sample_vec
-
-class PatientDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        return self.data[idx]
 
 class NeuralODE(nn.Module):
    def __init__(self, ode_func):
@@ -191,7 +142,7 @@ class TrainODE(nn.Module):
         final_time_series = nn.functional.relu(latent_time_series[:, :, 0])
         #self.decay_std()
         return final_time_series
-    
+
 def load_data(data_file, covariate_file, dose_size, dose_regime_index):
     pk_pd_dataframe = pd.read_csv(data_file)
     cp_response_data = pk_pd_dataframe[['ID', 'time', 'CP', 'RESPONSE']]
@@ -254,67 +205,6 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
     mask = torch.isin(full_time_tensor, check_time_tensor)
     return full_time_tensor, mask, all_patient_data
 
-def load_validation_data(data_file, covariate_file, dose_size, dose_regime_index):
-    pk_pd_dataframe = pd.read_csv(data_file)
-    cp_response_data = pk_pd_dataframe[['ID', 'time', 'CP', 'RESPONSE']]
-    grouped_data = cp_response_data.groupby('ID')
-    individual_patient_data = {}
-    for patient_id, group in grouped_data:
-        time_data = group['time'].values
-        cp_data = group['CP'].values
-        response_data = group['RESPONSE'].values
-
-        individual_patient_data[patient_id] = {
-            'time': time_data,
-            'CP': cp_data,
-            'RESPONSE': response_data
-        }
-
-    pk_pd_dataframe = pd.read_csv(covariate_file)
-    cp_response_data = pk_pd_dataframe[['ID', 'WT', 'AGE', 'SEX']]
-    grouped_data = cp_response_data.groupby('ID')
-    individual_patient_covariate_data = {}
-    for patient_id, group in grouped_data:
-        weight_data = group['WT'].values
-        age_data = group['AGE'].values
-        sex_data = group['SEX'].values
-
-        individual_patient_covariate_data[patient_id] = {
-            'WT': weight_data,
-            'AGE': age_data,
-            'SEX': sex_data
-        }
-
-    length = len(individual_patient_data[1]['time'])
-
-    all_patient_data = np.zeros((25, 7, length))
-
-    for i in range(76, 101):
-        all_patient_data[i - 76, 0, :] = individual_patient_data[i]['time']
-        all_patient_data[i - 76, 1, :] = individual_patient_data[i]['CP']
-        all_patient_data[i - 76, 2, :] = individual_patient_covariate_data[i]['WT']
-        all_patient_data[i - 76, 3, :] = individual_patient_covariate_data[i]['AGE']
-        all_patient_data[i - 76, 4, :] = individual_patient_covariate_data[i]['SEX']
-        all_patient_data[i - 76, 5, :] = dose_size
-        all_patient_data[i - 76, 6, :] = dose_regime_index
-
-    samples = np.zeros(35, dtype='int')
-    
-    i = 1
-    samples[i] = samples[i - 1] + 41
-    samples[i + 1] = samples[i] + 200
-    i += 2
-    while i < 35:
-        samples[i] = samples[i - 1] + 40
-        samples[i + 1] = samples[i] + 200
-        i += 2
-    all_patient_data = all_patient_data[:, :, samples]
-
-    full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    check_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    mask = torch.isin(full_time_tensor, check_time_tensor)
-    return full_time_tensor, mask, all_patient_data
-
 class TestNetwork(nn.Module):
     def __init__(self, patient_encoding, increasing_net, decreasing_net, zero_dose):
        super(TestNetwork, self).__init__()
@@ -324,24 +214,6 @@ class TestNetwork(nn.Module):
        self.peak_dose = 4
        self.zero_dose = zero_dose
 
-    def forward_dataframe(self, input):
-        age = torch.tensor(input['Age'].values).unsqueeze(-1)
-        weight = torch.tensor(input['Weight'].values).unsqueeze(-1)
-        sex = torch.tensor(input['Sex'].values).unsqueeze(-1)
-        dose_size = torch.tensor(input['Dose Size'].values).unsqueeze(-1)
-        last_dose = torch.tensor(input['Last Dose'].values).unsqueeze(-1)
-        current_concentration = torch.tensor(input['Current Concentration'].values).unsqueeze(-1)
-        num_dose = torch.tensor(input['Number of Doses Taken'].values).unsqueeze(-1)
-        covariates = torch.cat([weight, age, sex], dim=1)
-        steering_variables = self.patient_encoding(covariates)
-        if (last_dose >= self.peak_dose).any():
-            ode_input = torch.cat([steering_variables], dim=1)
-            dzdt = -(self.decreasing_net(ode_input)) * current_concentration * min(last_dose[0] - self.peak_dose, 1)
-        else:
-            ode_input = torch.cat([steering_variables, dose_size, last_dose, current_concentration, num_dose], dim=1)
-            dzdt = self.increasing_net(ode_input)
-        return dzdt
-    
     def forward(self, input):
         covariates = input[:, :3]
         dose_size = input[:, 3].unsqueeze(-1)
@@ -354,47 +226,7 @@ class TestNetwork(nn.Module):
             if not (dose_size[i][0] == self.zero_dose):
                 ode_input = torch.cat([steering_variables[i].unsqueeze(0), dose_size[i].unsqueeze(0), last_dose[i].unsqueeze(0), current_concentration[i].unsqueeze(0), num_dose[i].unsqueeze(0)], dim=1)
                 dzdt[i][0] = self.increasing_net(ode_input)
-        """ if (last_dose >= self.peak_dose).any():
-            ode_input = torch.cat([steering_variables], dim=1)
-            dzdt = -(self.decreasing_net(ode_input)) * current_concentration * min(last_dose[0] - self.peak_dose, 1)
-        else:
-            ode_input = torch.cat([steering_variables, dose_size, last_dose, current_concentration, num_dose], dim=1)
-            dzdt = self.increasing_net(ode_input) """
         return dzdt
-
-
-def initialize_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_normal_(m.weight, gain=0.25)
-        m.bias.data.fill_(0)
-
-def load_parameters_into_model(model, param_vector):
-    """
-    Given a 1D param_vector sampled from SWAG (or any other method),
-    load it back into the model's parameters in the correct shapes.
-    """
-    # We'll build a fresh state_dict whose tensor shapes match the original model.
-    new_state_dict = {}
-    
-    # We'll track where we are in 'param_vector'.
-    offset = 0
-    
-    # Iterate over the model's existing parameters in order
-    for key, old_tensor in model.state_dict().items():
-        # Number of elements in this parameter
-        numel = old_tensor.numel()
-        
-        # Extract that many entries from 'param_vector'
-        new_tensor = param_vector[offset : offset + numel].view(old_tensor.shape)
-        
-        # Store them in our new dict, under the same key
-        new_state_dict[key] = new_tensor
-        
-        # Advance the offset
-        offset += numel
-    
-    # Finally, load our new state_dict into the model
-    model.load_state_dict(new_state_dict)
 
 dose_size_1 = 100
 dose_size_2 = 50
@@ -409,10 +241,6 @@ dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 full_time_tensor, mask, all_patient_data_1 = load_data('Non Random Data/PKPD_100_24_5_Non_Random.csv', 'Non Random Data/100_24_5_Non_Random.csv', dose_size_1, 0)
 full_time_tensor, mask, all_patient_data_2 = load_data('Non Random Data/PKPD_50_24_10__Non_Random.csv', 'Non Random Data/50_24_10_Non_Random.csv', dose_size_2, 1)
 full_time_tensor, mask, all_patient_data_3 = load_data('Non Random Data/PKPD_0_24_10_Non_Random.csv', 'Non Random Data/0_24_10_Non_Random.csv', dose_size_3, 2)
-
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Non Random Data/PKPD_100_24_5_Non_Random.csv', 'Non Random Data/100_24_5_Non_Random.csv', dose_size_1, 0)
-val_time_tensor_1, val_mask_2, val_patient_data_2 = load_validation_data('Non Random Data/PKPD_50_24_10__Non_Random.csv', 'Non Random Data/50_24_10_Non_Random.csv', dose_size_2, 1)
-val_time_tensor_1, val_mask_3, val_patient_data_3 = load_validation_data('Non Random Data/PKPD_0_24_10_Non_Random.csv', 'Non Random Data/0_24_10_Non_Random.csv', dose_size_3, 2)
 
 last_dose = torch.tensor(0.0, dtype=torch.float32).expand([225, 1])
 current_concentration = torch.tensor(0.0, dtype=torch.float32).expand([225, 1])
@@ -431,16 +259,12 @@ column_names = ['Weight', 'Age', 'Sex', 'Dose Size', 'Last Dose', 'Current Conce
 
 df = pd.DataFrame(input, columns=column_names)
 
-model = torch.load('flow_matching_model_swag_exponential_swag_0005_tan_1')
-swag_mean = torch.load('swag_mean_exponential_swag_0005_tan_1.pth')
-
-load_parameters_into_model(model, swag_mean)
+model = torch.load('flow_matching_model_0')
 
 patient_encoding_network = model.patient_encoding
 increasing_net = model.ode.increasing_net
 decreasing_net = model.ode.decreasing_net
 shap_model = TestNetwork(patient_encoding_network, increasing_net, decreasing_net, dose_size_3)
-samples = np.random.choice(225, 50, replace=False)
 
 explainer = shap.GradientExplainer(shap_model, input_tensor)
 shap_values = explainer.shap_values(input_tensor)[:, :, 0]
