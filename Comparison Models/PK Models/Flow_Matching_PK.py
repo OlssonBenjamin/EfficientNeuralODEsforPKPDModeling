@@ -390,43 +390,43 @@ dose_size_3 = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 
 # Load datasets
 full_time_tensor, mask, all_patient_data_1 = load_data(
-    'Zipped_Backups/Random Data/PKPD_100_24_5_Random.csv',
-    'Zipped_Backups/Random Data/100_24_5_Random.csv',
+    'Random Data/PKPD_100_24_5_Random.csv',
+    'Random Data/100_24_5_Random.csv',
     dose_size_1,
     0
 )
 
 _, _, all_patient_data_2 = load_data(
-    'Zipped_Backups/Random Data/PKPD_50_24_10_Random.csv',
-    'Zipped_Backups/Random Data/50_24_10_Random.csv',
+    'Random Data/PKPD_50_24_10_Random.csv',
+    'Random Data/50_24_10_Random.csv',
     dose_size_2,
     1
 )
 
 _, _, all_patient_data_3 = load_data(
-    'Zipped_Backups/Random Data/PKPD_0_24_10_Random.csv',
-    'Zipped_Backups/Random Data/0_24_10_Random.csv',
+    'Random Data/PKPD_0_24_10_Random.csv',
+    'Random Data/0_24_10_Random.csv',
     dose_size_3,
     2
 )
 
 val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data(
-    'Zipped_Backups/Random Data/PKPD_100_24_5_Random.csv',
-    'Zipped_Backups/Random Data/100_24_5_Random.csv',
+    'Random Data/PKPD_100_24_5_Random.csv',
+    'Random Data/100_24_5_Random.csv',
     dose_size_1,
     0
 )
 
 val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data(
-    'Zipped_Backups/Random Data/PKPD_50_24_10_Random.csv',
-    'Zipped_Backups/Random Data/50_24_10_Random.csv',
+    'Random Data/PKPD_50_24_10_Random.csv',
+    'Random Data/50_24_10_Random.csv',
     dose_size_2,
     1
 )
 
 val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data(
-    'Zipped_Backups/Random Data/PKPD_0_24_10_Random.csv',
-    'Zipped_Backups/Random Data/0_24_10_Random.csv',
+    'Random Data/PKPD_0_24_10_Random.csv',
+    'Random Data/0_24_10_Random.csv',
     dose_size_3,
     2
 )
@@ -617,5 +617,5 @@ for epoch in range(epochs):
             print(f'Validation Loss: {total_loss.item()}')
             validation_loss[epoch] = total_loss.item()
             if total_loss < best_loss:
-                torch.save(model, 'flow_matching_model_0')
+                torch.save(model, 'flow_matching_model_1')
                 best_loss = total_loss
