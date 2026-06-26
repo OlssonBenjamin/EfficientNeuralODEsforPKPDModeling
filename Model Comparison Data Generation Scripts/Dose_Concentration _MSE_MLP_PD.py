@@ -245,5 +245,5 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('SimpleNet_No_Jump_Dose_Size_MSE_pd_1',np.array(mse_list))
+np.save('MLP_Dose_Size_MSE_pd_1',np.array(mse_list))
 
