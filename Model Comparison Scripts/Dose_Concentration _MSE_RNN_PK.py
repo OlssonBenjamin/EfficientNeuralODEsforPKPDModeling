@@ -263,10 +263,4 @@ for data_loader in val_data_loaders:
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
 np.save('rnn_pk_dose_size_1',np.array(mse_list))
-plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
-plt.xlabel('Dose Size')
-plt.ylabel('MSE of Concentration Prediction')
-plt.legend()
-#plt.savefig('MSE vs Concentration Final')
-plt.show()
-print()
+
