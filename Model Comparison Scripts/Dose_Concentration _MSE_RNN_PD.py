@@ -177,7 +177,7 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Models/rnn_no_jump_pd_8')
+model = torch.load('Models/rnn_pd_1')
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print(num_params)
@@ -263,7 +263,7 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('RNN_No_jump_Dose_Size_MSE_pd_3',np.array(mse_list))
+np.save('rnn_pd_dose_size_1',np.array(mse_list))
 plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
 plt.xlabel('Dose Size')
 plt.ylabel('MSE of Concentration Prediction')

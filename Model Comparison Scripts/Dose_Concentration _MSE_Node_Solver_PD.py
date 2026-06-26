@@ -186,7 +186,7 @@ dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
 
-latent_ODE_1 = torch.load('node_backprop_solver_pd_1')
+latent_ODE = torch.load('node_backprop_solver_pd_1')
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/WT_AGE_SEX_0_24_8.csv', 'Dose Size Data/PK_PD_0_24_8.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/WT_AGE_SEX_25_24_8.csv', 'Dose Size Data/PK_PD_25_24_8.csv', dose_size_2, 0)
@@ -256,18 +256,12 @@ for data_loader in val_data_loaders:
         data_tensor = batch[:, 1, :].to(torch.float32)
         if batch[0, 6, 0] == 0:
             dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
-        x_hat = latent_ODE_1(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        plt.plot(full_time_tensor[val_mask], x_hat[15, :])
-        plt.plot(full_time_tensor[val_mask], data_tensor[15, :])
-        title = 'Jump Neural ODE ' + str(batch[0, 5, 0].item())
-        plt.title(title)
-        title = 'doseplots/jump_neural_ode_' + str(int(batch[0, 5, 0].item()))
-        plt.show() 
+        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
         loss = cost_func(x_hat, data_tensor)
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('node_dose_size_MSE_pd_1',np.array(mse_list))
+np.save('node_pd_dose_size_1',np.array(mse_list))
 plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
 plt.xlabel('Dose Size')
 plt.ylabel('MSE of Concentration Prediction')

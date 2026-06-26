@@ -245,4 +245,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('MLP_Dose_Size_MSE_pk_1',np.array(mse_list))
+np.save('mlp_dose_size_pk_1',np.array(mse_list))

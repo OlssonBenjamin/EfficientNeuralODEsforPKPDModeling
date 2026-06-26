@@ -185,11 +185,7 @@ dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
 
-latent_ODE_1 = torch.load('Models/node_pk_s_1')
-latent_ODE_2 = torch.load('Models/semi_simple_ode_euler_2')
-latent_ODE_3 = torch.load('Models/semi_simple_ode_euler_3')
-latent_ODE_4 = torch.load('Models/semi_simple_ode_euler_4')
-latent_ODE_5 = torch.load('Models/semi_simple_ode_euler_5')
+latent_ODE = torch.load('Models/node_pk_1')
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/WT_AGE_SEX_0_24_8.csv', 'Dose Size Data/PK_PD_0_24_8.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/WT_AGE_SEX_25_24_8.csv', 'Dose Size Data/PK_PD_25_24_8.csv', dose_size_2, 0)
@@ -259,29 +255,9 @@ for data_loader in val_data_loaders:
         data_tensor = batch[:, 1, :].to(torch.float32)
         if batch[0, 6, 0] == 0:
             dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
-        x_hat_1 = latent_ODE_1(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        """ x_hat_2 = latent_ODE_2(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        x_hat_3 = latent_ODE_3(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        x_hat_4 = latent_ODE_4(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        x_hat_5 = latent_ODE_5(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0) """
-        #x_hat = torch.stack([x_hat_1, x_hat_2, x_hat_3, x_hat_4, x_hat_5], dim=-1)
-        #x_hat = torch.mean(x_hat, dim=-1)
-        #x_hat = x_hat
-        plt.plot(full_time_tensor[val_mask], x_hat_1[15, :])
-        plt.plot(full_time_tensor[val_mask], data_tensor[15, :])
-        title = 'Jump Neural ODE ' + str(batch[0, 5, 0].item())
-        plt.title(title)
-        title = 'doseplots/jump_neural_ode_' + str(int(batch[0, 5, 0].item()))
-        plt.show() 
-        #loss = cost_func(x_hat, data_tensor)
-        #mse_list.append(loss)
+        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
+        loss = cost_func(x_hat, data_tensor)
+        mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-#np.save('Node_no_jump_Dose_Size_MSE_1',np.array(mse_list))
-plt.plot(concentration_list, mse_list, label='MSE vs. Dose Size')
-plt.xlabel('Dose Size')
-plt.ylabel('MSE of Concentration Prediction')
-plt.legend()
-#plt.savefig('MSE vs Concentration Final')
-plt.show()
-print()
+np.save('node_pk_dose_size_1',np.array(mse_list))
