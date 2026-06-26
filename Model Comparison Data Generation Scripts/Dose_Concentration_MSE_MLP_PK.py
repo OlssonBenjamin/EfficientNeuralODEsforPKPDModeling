@@ -117,13 +117,12 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
     
     i = 1
     samples[i] = samples[i - 1] + 41
-    samples[i + 1] = samples[i] + 195
+    samples[i + 1] = samples[i] + 200
     i += 2
     while i < 35:
         samples[i] = samples[i - 1] + 40
-        samples[i + 1] = samples[i] + 195
+        samples[i + 1] = samples[i] + 200
         i += 2
-    samples[-1] = samples[-1] - 10
     all_patient_data = all_patient_data[:, :, samples]
 
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
