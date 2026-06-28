@@ -250,7 +250,7 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = SimpleNetwork(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 250
+epochs = 300
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -261,6 +261,7 @@ length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(a
 
 for epoch in range(epochs):
     train_loss = 0
+    random.shuffle(train_dataloaders)
     for train_dataloader in train_dataloaders:
         for batch in train_dataloader:
             optimizer.zero_grad()
@@ -308,10 +309,10 @@ for epoch in range(epochs):
         print(total_loss.item())
     validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'mlp_pk_1')
+        torch.save(model, 'Saved Models/mlp_pk_1')
         best_loss = total_loss.item()
-    if epochs >= 99:
+    if epoch == 200:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
-np.save('MLP_Training_Loss_pk_1.npy', training_loss)
-np.save('MLP_Validation_Loss_pk_1.npy', validation_loss)
+np.save('Saved Data/Losses/MLP_Training_Loss_pk_1.npy', training_loss)
+np.save('Saved Data/Losses/MLP_Validation_Loss_pk_1.npy', validation_loss)

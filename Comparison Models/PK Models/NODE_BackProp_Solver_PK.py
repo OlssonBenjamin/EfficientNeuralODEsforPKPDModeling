@@ -19,30 +19,15 @@ class PatientDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx]
 
-class Encoder(nn.Module):
-    def __init__(self, hidden_layer, bottleneck):
-        super(Encoder, self).__init__()
-        self.encoder = torch.nn.Sequential(
-            nn.Linear(4, hidden_layer),
-            nn.SiLU(),
-            nn.Linear(hidden_layer, 4 * hidden_layer),
-            nn.Linear(4 * hidden_layer,  bottleneck)
-        )
-        self.bottleneck = bottleneck
-
-    def forward(self, input):
-        x = self.encoder(input)
-        return x
-    
 class ODEFunc(nn.Module):
    def __init__(self, bottleneck):
        super(ODEFunc, self).__init__()
        self.net = nn.Sequential(
-           nn.Linear(bottleneck * 2 + 1, 128),
+           nn.Linear(bottleneck * 2 + 1, 32),
            nn.SiLU(),
-           nn.Linear(128, 512),
+           nn.Linear(32, 32),
            nn.SiLU(),
-           nn.Linear(512, 1)
+           nn.Linear(32, 1)
        )
        self.dose_encoding = nn.Sequential(
            nn.Linear(2, 32),
@@ -50,20 +35,22 @@ class ODEFunc(nn.Module):
            nn.Linear(32, bottleneck)
        )
 
+       self.bottleneck = bottleneck
+
    def forward(self, t, y):
         y0 = y[:, 0].unsqueeze(1)
-        steering_variables = y[:, 1:17]
-        dosing_times = y[:, 17:]
+        steering_variables = y[:, 1:self.bottleneck + 1]
+        dosing_times = y[:, self.bottleneck + 1:-1]
+        dose_size = y[:, -1].unsqueeze(-1)
         t_expanded = t.unsqueeze(0).expand((y0.size(0), dosing_times.size(1)))
         mask = (dosing_times <= t_expanded)
         masked_dosing_times = dosing_times * mask 
         last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
-        total_doses = mask.sum(dim=1, keepdim=True).float()
-        dose_input = torch.cat([last_dose, total_doses], dim=1)
+        dose_input = torch.cat([last_dose, dose_size], dim=1)
         dose_encoding = self.dose_encoding(dose_input)
         ode_input = torch.cat([y0, steering_variables, dose_encoding], dim=1)
         dzdt = self.net(ode_input)
-        dzdt = torch.cat([dzdt, torch.zeros_like(steering_variables), torch.zeros_like(dosing_times)], dim=1)
+        dzdt = torch.cat([dzdt, torch.zeros_like(steering_variables), torch.zeros_like(dosing_times), torch.zeros_like(dose_size)], dim=1)
         return dzdt
 
 class NeuralODE(nn.Module):
@@ -72,19 +59,24 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='euler')
+       return odeint(self.ode_func, input, t, method='euler', options=dict(step_size=1.0))
 
 class LatentODE(nn.Module):
-    def __init__(self, encoder, node):
+    def __init__(self, num_variables, node, bottleneck):
        super(LatentODE, self).__init__()
-       self.encoder = encoder
+       self.patient_encoding = nn.Sequential(
+           nn.Linear(num_variables, 32),
+           nn.SiLU(),
+           nn.Linear(32, bottleneck)
+       )
+
        self.node = node
 
     def forward(self, input, dosing_times, predict_times):
-        x = self.encoder(input)
+        x = self.patient_encoding(input[:, :-1])
         batch_size = x.size(0)
         y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
-        encoding = torch.cat([y0, x, dosing_times], dim=1)
+        encoding = torch.cat([y0, x, dosing_times, input[:, -1].unsqueeze(-1)], dim=1)
         latent_time_series = self.node(encoding, predict_times)
         return latent_time_series[:, :, 0]
 
@@ -138,7 +130,6 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
         all_patient_data[i - 1, 5, :] = dose_size
         all_patient_data[i - 1, 6, :] = dose_regime_index
 
-    #samples = np.zeros(29, dtype='int')
     weights = np.ones(35)
     samples = np.zeros(35, dtype='int')
     
@@ -153,10 +144,7 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
     all_patient_data = all_patient_data[:, :, samples]
 
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    check_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    fine_time_tensor = torch.linspace(all_patient_data[0, 0, 0], all_patient_data[0, 0, -1], 408)
-    full_time_tensor = torch.cat([check_time_tensor, fine_time_tensor]).sort()[0].unique()
-    mask = torch.isin(full_time_tensor, check_time_tensor)
+    mask = torch.ones(len(full_time_tensor), dtype=torch.bool)
     return full_time_tensor, mask, all_patient_data
 
 def load_validation_data(data_file, covariate_file, dose_size, dose_regime_index):
@@ -216,10 +204,7 @@ def load_validation_data(data_file, covariate_file, dose_size, dose_regime_index
     all_patient_data = all_patient_data[:, :, samples]
 
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    check_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    fine_time_tensor = torch.linspace(all_patient_data[0, 0, 0], all_patient_data[0, 0, -1], 408)
-    full_time_tensor = torch.cat([check_time_tensor, fine_time_tensor]).sort()[0].unique()
-    mask = torch.isin(full_time_tensor, check_time_tensor)
+    mask = torch.ones(len(full_time_tensor), dtype=torch.bool)
     return full_time_tensor, mask, all_patient_data
 
 
@@ -227,27 +212,33 @@ dose_size_1 = 100
 dose_size_2 = 50
 dose_size_3 = 0
 
+dose_sizes = np.array([100, 50, 0])
+
+dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
+dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
+dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
+
 num_doses_1 = 5
 num_doses_2 = 10
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Zipped_Backups/Random Data/PKPD_100_24_5_Random.csv',
-                                                       'Zipped_Backups/Random Data/100_24_5_Random.csv',
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv',
+                                                       'Random Data/100_24_5_Random.csv',
                                                        dose_size_1, 0)
-_, _, all_patient_data_2 = load_data('Zipped_Backups/Random Data/PKPD_50_24_10_Random.csv',
-                                     'Zipped_Backups/Random Data/50_24_10_Random.csv',
+_, _, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv',
+                                     'Random Data/50_24_10_Random.csv',
                                      dose_size_2, 1)
-_, _, all_patient_data_3 = load_data('Zipped_Backups/Random Data/PKPD_0_24_10_Random.csv',
-                                     'Zipped_Backups/Random Data/0_24_10_Random.csv',
+_, _, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv',
+                                     'Random Data/0_24_10_Random.csv',
                                      dose_size_3, 2)
 
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Zipped_Backups/Random Data/PKPD_100_24_5_Random.csv',
-                                                       'Zipped_Backups/Random Data/100_24_5_Random.csv',
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv',
+                                                       'Random Data/100_24_5_Random.csv',
     dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Zipped_Backups/Random Data/PKPD_50_24_10_Random.csv',
-                                     'Zipped_Backups/Random Data/50_24_10_Random.csv',
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv',
+                                     'Random Data/50_24_10_Random.csv',
     dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Zipped_Backups/Random Data/PKPD_0_24_10_Random.csv',
-                                     'Zipped_Backups/Random Data/0_24_10_Random.csv',
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv',
+                                     'Random Data/0_24_10_Random.csv',
     dose_size_3, 2)
 dose_times_1 = np.zeros(5)
 dose_times_2 = np.zeros(10)
@@ -283,20 +274,22 @@ train_dataloaders = [dataloader_1, dataloader_2, dataloader_3]
 val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 
 bottleneck = 16
-encoder = Encoder(32, bottleneck)
+
 ode_func = ODEFunc(bottleneck)
 node = NeuralODE(ode_func)
-latent_ODE = LatentODE(encoder, node)
+latent_ODE = LatentODE(3, node, bottleneck)
 latent_ODE.apply(initialize_weights)
-epochs = 300
+epochs = 100
 optimizer = torch.optim.Adam(latent_ODE.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
 training_loss = np.zeros(epochs)
 validation_loss = np.zeros(epochs)
+length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(all_patient_data_3)
 
 for epoch in range(epochs):
+    train_loss = 0
     random.shuffle(train_dataloaders)
     for dataloader in train_dataloaders:
         for batch in dataloader:
@@ -323,7 +316,7 @@ for epoch in range(epochs):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(latent_ODE.parameters(), max_norm=1.0)
             optimizer.step()
-    training_loss[epoch] = train_loss / (length_training_data * len(full_time_tensor)) 
+    training_loss[epoch] = train_loss / (length_training_data * mask.sum().item()) 
     with torch.no_grad():
         total_loss = 0
         for val_dataloader in val_data_loaders:
@@ -342,14 +335,16 @@ for epoch in range(epochs):
                 x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor)
                 x_hat = x_hat[mask].transpose(1,0)
                 loss = cost_func(x_hat, data_tensor)
-                total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
+                total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * mask.sum().item())
         print(total_loss.item())
         validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(latent_ODE, 'node_backprop_solver_pk_1')
+        torch.save(latent_ODE, 'Saved Models/node_backprop_solver_pk_1')
     if total_loss.item() < 0.75:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
     if total_loss.item() < best_loss:
         best_loss = total_loss.item()
+np.save('Saved Data/Losses/node_bps_Training_Loss_pk_1.npy', training_loss)
+np.save('Saved Data/Losses/node_bps_Validation_Loss_pk_1.npy', validation_loss)
 

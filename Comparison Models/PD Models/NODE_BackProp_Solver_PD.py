@@ -46,7 +46,6 @@ class ODEFunc(nn.Module):
         mask = (dosing_times <= t_expanded)
         masked_dosing_times = dosing_times * mask 
         last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
-        total_doses = mask.sum(dim=1, keepdim=True).float()
         dose_input = torch.cat([last_dose, dose_size], dim=1)
         dose_encoding = self.dose_encoding(dose_input)
         ode_input = torch.cat([y0, steering_variables, dose_encoding], dim=1)
@@ -60,7 +59,9 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='euler', options=dict(step_size=0.5))
+       return odeint(self.ode_func, input, t, method='euler', 
+                     options=dict(step_size=1.0)
+                     )
    
 class LatentODE(nn.Module):
     def __init__(self, num_variables, node, bottleneck):
@@ -132,10 +133,7 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
         all_patient_data[i - 1, 6, :] = dose_regime_index
 
     samples = np.zeros(35, dtype='int')
-
-    
-    plt.plot(all_patient_data[15, 0, :], all_patient_data[15, 1, :], color='red', label='Full Time Series')
-    plt.title('PD Time Series Training Data')
+ 
 
     i = 1
     samples[i] = samples[i - 1] + 46
@@ -147,9 +145,6 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
         i += 2
     samples[-1] = samples[-1] - 10
     all_patient_data = all_patient_data[:, :, samples]
-    plt.scatter(all_patient_data[15, 0, :], all_patient_data[15, 1, :], color='blue', label='Training Points')
-    plt.legend()
-    plt.show()
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
     check_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
     mask = torch.isin(full_time_tensor, check_time_tensor)

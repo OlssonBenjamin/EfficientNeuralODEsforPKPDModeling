@@ -507,7 +507,7 @@ cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
 
 training_loss = np.zeros(epochs)
-validation_loss = np.zeros(10)
+validation_loss = np.zeros(11)
 
 length_training_data = (
     len(all_patient_data_1)
@@ -615,7 +615,7 @@ for epoch in range(epochs):
                     )
 
             print(f'Validation Loss: {total_loss.item()}')
-            validation_loss[epoch] = total_loss.item()
+            validation_loss[epoch // 250] = total_loss.item()
             if total_loss < best_loss:
-                torch.save(model, 'flow_matching_model_1')
+                torch.save(model, 'Saved Models/flow_matching_model_1')
                 best_loss = total_loss

@@ -23,9 +23,9 @@ class SimpleNetwork(nn.Module):
     def __init__(self, num_variables, bottleneck):
        super(SimpleNetwork, self).__init__()
        self.time_func = nn.Sequential(
-           nn.Linear(bottleneck * 2 + 1, 32),
+           nn.Linear(bottleneck * 2 + 1, 128),
            nn.SiLU(),
-           nn.Linear(32, 32),
+           nn.Linear(128, 32),
            nn.SiLU(),
            nn.Linear(32, 1)
        )

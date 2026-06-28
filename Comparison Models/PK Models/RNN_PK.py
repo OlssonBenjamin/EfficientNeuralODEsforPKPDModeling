@@ -257,7 +257,7 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = PKPDPredictor(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 250
+epochs = 300
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -316,9 +316,9 @@ for epoch in range(epochs):
         print(total_loss.item())
         validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Models/rnn_no_jump_5')
+        torch.save(model, 'Saved Models/rnn_pk_1')
         best_loss = total_loss.item()
-    if epoch >= 99:
+    if epoch == 200:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
 

@@ -42,9 +42,8 @@ class SimpleNetwork(nn.Module):
        )
     def forward(self, input, dosing_times, predict_times):
         batch_size = input.size(0)
-        y0 = torch.zeros(batch_size, 1, dtype=torch.float32) + 50
+        y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
         final_time_series = torch.zeros((len(predict_times), batch_size))
-        final_time_series[0, :] += 50
         steering_variables = self.patient_encoding(input[:, :-1])
         for i, times in enumerate(predict_times):
             if i == 0:
@@ -106,7 +105,7 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
-        all_patient_data[i - 1, 1, :] = individual_patient_data[i]['RESPONSE']
+        all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
         all_patient_data[i - 1, 3, :] = individual_patient_covariate_data[i]['AGE']
         all_patient_data[i - 1, 4, :] = individual_patient_covariate_data[i]['SEX']
@@ -165,22 +164,21 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Models/mlp_pd_1')
+model = torch.load('Saved Models/mlp_pk_1', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(num_params)
 
-full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/WT_AGE_SEX_0_24_8.csv', 'Dose Size Data/PK_PD_0_24_8.csv', dose_size_1, 0)
-full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/WT_AGE_SEX_25_24_8.csv', 'Dose Size Data/PK_PD_25_24_8.csv', dose_size_2, 0)
-full_time_tensor, val_mask, val_patient_data_3 = load_data('Dose Size Data/WT_AGE_SEX_50_24_8.csv', 'Dose Size Data/PK_PD_50_24_8.csv', dose_size_3, 0)
-full_time_tensor, val_mask, val_patient_data_4 = load_data('Dose Size Data/WT_AGE_SEX_75_24_8.csv', 'Dose Size Data/PK_PD_75_24_8.csv', dose_size_4, 0)
-full_time_tensor, val_mask, val_patient_data_5 = load_data('Dose Size Data/WT_AGE_SEX_100_24_8.csv', 'Dose Size Data/PK_PD_100_24_8.csv', dose_size_5, 0)
-full_time_tensor, val_mask, val_patient_data_6 = load_data('Dose Size Data/WT_AGE_SEX_125_24_8.csv', 'Dose Size Data/PK_PD_125_24_8.csv', dose_size_6, 0)
-full_time_tensor, val_mask, val_patient_data_7 = load_data('Dose Size Data/WT_AGE_SEX_150_24_8.csv', 'Dose Size Data/PK_PD_150_24_8.csv', dose_size_7, 0)
-full_time_tensor, val_mask, val_patient_data_8 = load_data('Dose Size Data/WT_AGE_SEX_175_24_8.csv', 'Dose Size Data/PK_PD_175_24_8.csv', dose_size_8, 0)
-full_time_tensor, val_mask, val_patient_data_9 = load_data('Dose Size Data/WT_AGE_SEX_200_24_8.csv', 'Dose Size Data/PK_PD_200_24_8.csv', dose_size_9, 0)
-full_time_tensor, val_mask, val_patient_data_10 = load_data('Dose Size Data/WT_AGE_SEX_225_24_8.csv', 'Dose Size Data/PK_PD_225_24_8.csv', dose_size_10, 0)
-full_time_tensor, val_mask, val_patient_data_11 = load_data('Dose Size Data/WT_AGE_SEX_250_24_8.csv', 'Dose Size Data/PK_PD_250_24_8.csv', dose_size_11, 0)
+full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
+full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
+full_time_tensor, val_mask, val_patient_data_3 = load_data('Dose Size Data/50_24_8_100.csv', 'Dose Size Data/PK_PD_50_24_8_100.csv', dose_size_3, 0)
+full_time_tensor, val_mask, val_patient_data_4 = load_data('Dose Size Data/75_24_8_100.csv', 'Dose Size Data/PK_PD_75_24_8_100.csv', dose_size_4, 0)
+full_time_tensor, val_mask, val_patient_data_5 = load_data('Dose Size Data/100_24_8_100.csv', 'Dose Size Data/PK_PD_100_24_8_100.csv', dose_size_5, 0)
+full_time_tensor, val_mask, val_patient_data_6 = load_data('Dose Size Data/125_24_8_100.csv', 'Dose Size Data/PK_PD_125_24_8_100.csv', dose_size_6, 0)
+full_time_tensor, val_mask, val_patient_data_7 = load_data('Dose Size Data/150_24_8_100.csv', 'Dose Size Data/PK_PD_150_24_8_100.csv', dose_size_7, 0)
+full_time_tensor, val_mask, val_patient_data_8 = load_data('Dose Size Data/175_24_8_100.csv', 'Dose Size Data/PK_PD_175_24_8_100.csv', dose_size_8, 0)
+full_time_tensor, val_mask, val_patient_data_9 = load_data('Dose Size Data/200_24_8_100.csv', 'Dose Size Data/PK_PD_200_24_8_100.csv', dose_size_9, 0)
+full_time_tensor, val_mask, val_patient_data_10 = load_data('Dose Size Data/225_24_8_100.csv', 'Dose Size Data/PK_PD_225_24_8_100.csv', dose_size_10, 0)
+full_time_tensor, val_mask, val_patient_data_11 = load_data('Dose Size Data/250_24_8_100.csv', 'Dose Size Data/PK_PD_250_24_8_100.csv', dose_size_11, 0)
 
 
 val_batch_size = 100
@@ -219,10 +217,10 @@ val_data_loaders = [val_dataloader_1,
                     val_dataloader_10,
                     val_dataloader_11]
 
-dose_times_1 = 4 * np.zeros(8)
+dose_times_1 = 4 * np.zeros(9)
 
 
-for i in range(1, 8):
+for i in range(1, 9):
     dose_times_1[i] = dose_times_1[i - 1] + 24
 
 

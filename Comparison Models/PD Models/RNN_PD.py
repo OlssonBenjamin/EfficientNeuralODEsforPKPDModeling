@@ -19,9 +19,9 @@ class RNN(nn.Module):
     def __init__(self, bottleneck):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(bottleneck * 2 + 1, 32),
+            nn.Linear(bottleneck * 2 + 1, 128),
             nn.SiLU(),
-            nn.Linear(32, 32),
+            nn.Linear(128, 32),
             nn.SiLU(),
             nn.Linear(32, 1)
         )

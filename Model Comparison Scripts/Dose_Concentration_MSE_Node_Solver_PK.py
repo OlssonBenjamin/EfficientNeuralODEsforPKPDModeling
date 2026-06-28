@@ -19,6 +19,7 @@ class PatientDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx]
 
+
 class ODEFunc(nn.Module):
    def __init__(self, bottleneck):
        super(ODEFunc, self).__init__()
@@ -46,7 +47,6 @@ class ODEFunc(nn.Module):
         mask = (dosing_times <= t_expanded)
         masked_dosing_times = dosing_times * mask 
         last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
-        total_doses = mask.sum(dim=1, keepdim=True).float()
         dose_input = torch.cat([last_dose, dose_size], dim=1)
         dose_encoding = self.dose_encoding(dose_input)
         ode_input = torch.cat([y0, steering_variables, dose_encoding], dim=1)
@@ -60,7 +60,9 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='euler', options=dict(step_size=0.5))
+       return odeint(self.ode_func, input, t, method='euler', 
+                     options=dict(step_size=1.0)
+                     )
 
 class LatentODE(nn.Module):
     def __init__(self, num_variables, node, bottleneck):
@@ -76,10 +78,11 @@ class LatentODE(nn.Module):
     def forward(self, input, dosing_times, predict_times):
         x = self.patient_encoding(input[:, :-1])
         batch_size = x.size(0)
-        y0 = torch.zeros(batch_size, 1, dtype=torch.float32) + 50
+        y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
         encoding = torch.cat([y0, x, dosing_times, input[:, -1].unsqueeze(-1)], dim=1)
         latent_time_series = self.node(encoding, predict_times)
         return latent_time_series[:, :, 0]
+
 
 def initialize_weights(m):
     if isinstance(m, nn.Linear):
@@ -120,11 +123,11 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((75, 7, length))
+    all_patient_data = np.zeros((1, 7, length))
 
-    for i in range(1, 76):
+    for i in range(1, 2):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
-        all_patient_data[i - 1, 1, :] = individual_patient_data[i]['RESPONSE']
+        all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
         all_patient_data[i - 1, 3, :] = individual_patient_covariate_data[i]['AGE']
         all_patient_data[i - 1, 4, :] = individual_patient_covariate_data[i]['SEX']
@@ -134,19 +137,17 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
     samples = np.zeros(35, dtype='int')
     
     i = 1
-    samples[i] = samples[i - 1] + 46
-    samples[i + 1] = samples[i] + 195
+    samples[i] = samples[i - 1] + 41
+    samples[i + 1] = samples[i] + 200
     i += 2
     while i < 35:
-        samples[i] = samples[i - 1] + 45
-        samples[i + 1] = samples[i] + 195
+        samples[i] = samples[i - 1] + 40
+        samples[i + 1] = samples[i] + 200
         i += 2
-    samples[-1] = samples[-1] - 10
     all_patient_data = all_patient_data[:, :, samples]
 
     full_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    check_time_tensor = torch.tensor(all_patient_data[0, 0, :], dtype=torch.float32)
-    mask = torch.isin(full_time_tensor, check_time_tensor)
+    mask = torch.ones(len(full_time_tensor), dtype=torch.bool)
     return full_time_tensor, mask, all_patient_data
 
 
@@ -186,19 +187,19 @@ dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
 
-latent_ODE = torch.load('node_backprop_solver_pd_1')
+latent_ODE = torch.load('Saved Models/semi_simple_ode_euler_6', weights_only=False)
 
-full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/WT_AGE_SEX_0_24_8.csv', 'Dose Size Data/PK_PD_0_24_8.csv', dose_size_1, 0)
-full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/WT_AGE_SEX_25_24_8.csv', 'Dose Size Data/PK_PD_25_24_8.csv', dose_size_2, 0)
-full_time_tensor, val_mask, val_patient_data_3 = load_data('Dose Size Data/WT_AGE_SEX_50_24_8.csv', 'Dose Size Data/PK_PD_50_24_8.csv', dose_size_3, 0)
-full_time_tensor, val_mask, val_patient_data_4 = load_data('Dose Size Data/WT_AGE_SEX_75_24_8.csv', 'Dose Size Data/PK_PD_75_24_8.csv', dose_size_4, 0)
-full_time_tensor, val_mask, val_patient_data_5 = load_data('Dose Size Data/WT_AGE_SEX_100_24_8.csv', 'Dose Size Data/PK_PD_100_24_8.csv', dose_size_5, 0)
-full_time_tensor, val_mask, val_patient_data_6 = load_data('Dose Size Data/WT_AGE_SEX_125_24_8.csv', 'Dose Size Data/PK_PD_125_24_8.csv', dose_size_6, 0)
-full_time_tensor, val_mask, val_patient_data_7 = load_data('Dose Size Data/WT_AGE_SEX_150_24_8.csv', 'Dose Size Data/PK_PD_150_24_8.csv', dose_size_7, 0)
-full_time_tensor, val_mask, val_patient_data_8 = load_data('Dose Size Data/WT_AGE_SEX_175_24_8.csv', 'Dose Size Data/PK_PD_175_24_8.csv', dose_size_8, 0)
-full_time_tensor, val_mask, val_patient_data_9 = load_data('Dose Size Data/WT_AGE_SEX_200_24_8.csv', 'Dose Size Data/PK_PD_200_24_8.csv', dose_size_9, 0)
-full_time_tensor, val_mask, val_patient_data_10 = load_data('Dose Size Data/WT_AGE_SEX_225_24_8.csv', 'Dose Size Data/PK_PD_225_24_8.csv', dose_size_10, 0)
-full_time_tensor, val_mask, val_patient_data_11 = load_data('Dose Size Data/WT_AGE_SEX_250_24_8.csv', 'Dose Size Data/PK_PD_250_24_8.csv', dose_size_11, 0)
+full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
+full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
+full_time_tensor, val_mask, val_patient_data_3 = load_data('Dose Size Data/50_24_8_100.csv', 'Dose Size Data/PK_PD_50_24_8_100.csv', dose_size_3, 0)
+full_time_tensor, val_mask, val_patient_data_4 = load_data('Dose Size Data/75_24_8_100.csv', 'Dose Size Data/PK_PD_75_24_8_100.csv', dose_size_4, 0)
+full_time_tensor, val_mask, val_patient_data_5 = load_data('Dose Size Data/100_24_8_100.csv', 'Dose Size Data/PK_PD_100_24_8_100.csv', dose_size_5, 0)
+full_time_tensor, val_mask, val_patient_data_6 = load_data('Dose Size Data/125_24_8_100.csv', 'Dose Size Data/PK_PD_125_24_8_100.csv', dose_size_6, 0)
+full_time_tensor, val_mask, val_patient_data_7 = load_data('Dose Size Data/150_24_8_100.csv', 'Dose Size Data/PK_PD_150_24_8_100.csv', dose_size_7, 0)
+full_time_tensor, val_mask, val_patient_data_8 = load_data('Dose Size Data/175_24_8_100.csv', 'Dose Size Data/PK_PD_175_24_8_100.csv', dose_size_8, 0)
+full_time_tensor, val_mask, val_patient_data_9 = load_data('Dose Size Data/200_24_8_100.csv', 'Dose Size Data/PK_PD_200_24_8_100.csv', dose_size_9, 0)
+full_time_tensor, val_mask, val_patient_data_10 = load_data('Dose Size Data/225_24_8_100.csv', 'Dose Size Data/PK_PD_225_24_8_100.csv', dose_size_10, 0)
+full_time_tensor, val_mask, val_patient_data_11 = load_data('Dose Size Data/250_24_8_100.csv', 'Dose Size Data/PK_PD_250_24_8_100.csv', dose_size_11, 0)
 
 
 val_batch_size = 100
@@ -237,10 +238,10 @@ val_data_loaders = [val_dataloader_1,
                     val_dataloader_10,
                     val_dataloader_11]
 
-dose_times_1 = 4 * np.zeros(8)
+dose_times_1 = 4 * np.zeros(9)
 
 
-for i in range(1, 8):
+for i in range(1, 9):
     dose_times_1[i] = dose_times_1[i - 1] + 24
 
 
@@ -256,9 +257,9 @@ for data_loader in val_data_loaders:
         data_tensor = batch[:, 1, :].to(torch.float32)
         if batch[0, 6, 0] == 0:
             dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
-        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(1,0)
-        loss = cost_func(x_hat, data_tensor)
+        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze()
+        loss = cost_func(x_hat, data_tensor.squeeze())
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('node_pd_dose_size_1',np.array(mse_list))
+np.save('node_pk_dose_size_1',np.array(mse_list))
