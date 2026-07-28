@@ -9,6 +9,10 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 
+#Seeds used to generate models were 0 - 4
+torch.manual_seed(0)
+np.random.seed(0)
+
 class PatientDataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -49,9 +53,12 @@ class ODEFunc(nn.Module):
         dose_input = torch.cat([last_dose, dose_size], dim=1)
         dose_encoding = self.dose_encoding(dose_input)
         ode_input = torch.cat([y0, steering_variables, dose_encoding], dim=1)
-        dzdt = self.net(ode_input)
+        dzdt = torch.clamp(self.net(ode_input), -50, 50)        
+        mask = (y0 < 0) & (dzdt < 0)
+        dzdt = torch.where(mask, torch.zeros_like(dzdt), dzdt)
         dzdt = torch.cat([dzdt, torch.zeros_like(steering_variables), torch.zeros_like(dosing_times), torch.zeros_like(dose_size)], dim=1)
         return dzdt
+
 
 class NeuralODE(nn.Module):
    def __init__(self, ode_func):
@@ -60,7 +67,7 @@ class NeuralODE(nn.Module):
 
    def forward(self, input, t):
        return odeint(self.ode_func, input, t, method='euler', 
-                     options=dict(step_size=1.0)
+                     options=dict(step_size=0.25)
                      )
    
 class LatentODE(nn.Module):
@@ -276,7 +283,7 @@ ode_func = ODEFunc(bottleneck)
 node = NeuralODE(ode_func)
 model = LatentODE(3, node, bottleneck)
 model.apply(initialize_weights)
-epochs = 100
+epochs = 125
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -334,12 +341,14 @@ for epoch in range(epochs):
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         print(total_loss.item())
         validation_loss[epoch] = total_loss
-    np.save('Node Training_Loss_pd_1.npy', training_loss)
-    np.save('Node Validation_Loss_pd_1.npy', validation_loss)
+    #np.save('Node Training_Loss_pd_2.npy', training_loss)
+    #np.save('Node Validation_Loss_pd_2.npy', validation_loss)
     if total_loss.item() < best_loss:
-        torch.save(model, 'node_backprop_solver_pd_1')
+        if total_loss.item() < 8:
+            break
+        torch.save(model, 'node_backprop_solver_pd_0')
         best_loss = total_loss.item()
-    if epoch >= 75:
+    if epoch == 100:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
 

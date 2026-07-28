@@ -37,9 +37,9 @@ class RNN(nn.Module):
         self.bottleneck = bottleneck
     
     def forward(self, initial_conc, steering_variables, dosing_times, time_steps, dose_size):
-        output_trajectory = []
         conc_t = initial_conc.clone()
-        for t in time_steps:
+        output_trajectory = [conc_t.squeeze()]
+        for t in time_steps[:-1]:
             t_expanded = t.unsqueeze(0).expand(dosing_times.shape)
             mask = (dosing_times <= t_expanded)
             masked_dosing_times = dosing_times * mask
@@ -47,7 +47,7 @@ class RNN(nn.Module):
             dose_input = torch.cat([last_dose, dose_size], dim=1)
             dose_encoding = self.dose_encoding(dose_input)
             net_input = torch.cat([conc_t, steering_variables, dose_encoding], dim=1)
-            dconc = self.net(net_input) 
+            dconc = self.net(net_input)
             conc_t = conc_t + dconc
             output_trajectory.append(conc_t.squeeze())
         return torch.stack(output_trajectory, dim=0)
@@ -111,9 +111,9 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((1, 7, length))
+    all_patient_data = np.zeros((100, 7, length))
 
-    for i in range(1, 2):
+    for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
         all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
@@ -175,10 +175,9 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Saved Models/rnn_pk_1', weights_only=False)
+model = torch.load('Saved Models/rnn_pk_3_300', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(num_params)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -193,7 +192,7 @@ full_time_tensor, val_mask, val_patient_data_10 = load_data('Dose Size Data/225_
 full_time_tensor, val_mask, val_patient_data_11 = load_data('Dose Size Data/250_24_8_100.csv', 'Dose Size Data/PK_PD_250_24_8_100.csv', dose_size_11, 0)
 
 
-val_batch_size = 1
+val_batch_size = 100
 val_patient_dataset_1 = PatientDataset(val_patient_data_1)
 val_patient_dataset_2 = PatientDataset(val_patient_data_2)
 val_patient_dataset_3 = PatientDataset(val_patient_data_3)
@@ -250,10 +249,10 @@ for data_loader in val_data_loaders:
             dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
         x_hat = model(covariate_input, dose_time_input, full_time_tensor)
         x_hat = x_hat[val_mask]
-        x_hat = x_hat.detach().squeeze()
+        x_hat = x_hat.detach().squeeze().transpose(0,1)
         loss = cost_func(x_hat, data_tensor.squeeze())
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('rnn_pk_dose_size_1',np.array(mse_list))
+np.save('rnn_pk_dose_size_3_300',np.array(mse_list))
 

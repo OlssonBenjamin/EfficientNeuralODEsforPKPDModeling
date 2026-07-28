@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
-import random
+
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -44,11 +44,12 @@ class RNN(nn.Module):
             mask = (dosing_times <= t_expanded)
             masked_dosing_times = dosing_times * mask
             last_dose = t - masked_dosing_times.max(dim=1, keepdim=True)[0]
-            total_doses = mask.sum(dim=1, keepdim=True).float()
             dose_input = torch.cat([last_dose, dose_size], dim=1)
             dose_encoding = self.dose_encoding(dose_input)
             net_input = torch.cat([conc_t, steering_variables, dose_encoding], dim=1)
-            dconc = self.net(net_input) 
+            dconc = self.net(net_input)
+            mask = (conc_t < 0) & (dconc < 0)
+            dconc = torch.where(mask, torch.zeros_like(dconc), dconc)
             conc_t = conc_t + dconc
             output_trajectory.append(conc_t.squeeze())
         return torch.stack(output_trajectory, dim=0)
@@ -112,9 +113,9 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((75, 7, length))
+    all_patient_data = np.zeros((100, 7, length))
 
-    for i in range(1, 76):
+    for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
         all_patient_data[i - 1, 1, :] = individual_patient_data[i]['RESPONSE']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
@@ -177,10 +178,9 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Models/rnn_pd_1')
+model = torch.load('Saved Models/rnn_pd_4', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(num_params)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -231,17 +231,17 @@ val_data_loaders = [val_dataloader_1,
                     val_dataloader_10,
                     val_dataloader_11]
 
-dose_times_1 = 4 * np.zeros(8)
+dose_times_1 = 4 * np.zeros(9)
 
 
-for i in range(1, 8):
+for i in range(1, 9):
     dose_times_1[i] = dose_times_1[i - 1] + 24
 
 
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 
 mse_list = []
-
+model.eval()
 cost_func = torch.nn.MSELoss()
 for data_loader in val_data_loaders:
     for batch in data_loader:
@@ -253,14 +253,8 @@ for data_loader in val_data_loaders:
         x_hat = model(covariate_input, dose_time_input, full_time_tensor)
         x_hat = x_hat[val_mask].transpose(1,0)
         x_hat = x_hat.detach().squeeze()
-        """ plt.plot(full_time_tensor[val_mask], x_hat[15, :])
-        plt.plot(full_time_tensor[val_mask], data_tensor[15, :])
-        title = 'Jump Neural ODE ' + str(batch[0, 6, 0].item())
-        plt.title(title)
-        title = 'doseplots/jump_neural_ode_' + str(int(batch[0, 5, 0].item()))
-        plt.show() """
         loss = cost_func(x_hat, data_tensor)
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('rnn_pd_dose_size_1',np.array(mse_list))
+np.save('rnn_pd_dose_size_4',np.array(mse_list))

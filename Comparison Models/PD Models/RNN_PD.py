@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
+torch.manual_seed(4)
+np.random.seed(4)
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -19,9 +21,9 @@ class RNN(nn.Module):
     def __init__(self, bottleneck):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(bottleneck * 2 + 1, 128),
+            nn.Linear(bottleneck * 2 + 1, 32),
             nn.SiLU(),
-            nn.Linear(128, 32),
+            nn.Linear(32, 32),
             nn.SiLU(),
             nn.Linear(32, 1)
         )
@@ -43,7 +45,9 @@ class RNN(nn.Module):
             dose_input = torch.cat([last_dose, dose_size], dim=1)
             dose_encoding = self.dose_encoding(dose_input)
             net_input = torch.cat([conc_t, steering_variables, dose_encoding], dim=1)
-            dconc = self.net(net_input) 
+            dconc = self.net(net_input)
+            mask = (conc_t < 0) & (dconc < 0)
+            dconc = torch.where(mask, torch.zeros_like(dconc), dconc)
             conc_t = conc_t + dconc
             output_trajectory.append(conc_t.squeeze())
         return torch.stack(output_trajectory, dim=0)
@@ -260,7 +264,7 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = PKPDPredictor(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 100
+epochs = 300
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -295,8 +299,9 @@ for epoch in range(epochs):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
-    training_loss[epoch] = train_loss / (length_training_data * len(full_time_tensor)) 
+    training_loss[epoch] = (train_loss / (length_training_data * len(full_time_tensor))).detach().item()
     with torch.no_grad():
+        model.eval()
         total_loss = 0
         for val_dataloader in val_data_loaders:
             for batch in val_dataloader:
@@ -317,13 +322,13 @@ for epoch in range(epochs):
                 x_hat = model(covariate_input, dose_time_input, full_time_tensor)[mask].transpose(0, 1)
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         print(total_loss.item())
-        validation_loss[epoch] = total_loss
+        validation_loss[epoch] = total_loss.item()
     if total_loss.item() < best_loss:
-        torch.save(model, 'Models/rnn_pd_1')
+        torch.save(model, 'Saved Models/rnn_pd_4')
         best_loss = total_loss.item()
-    if epoch >= 75:
+        if total_loss.item() < 12:
+            break
+    model.train()
+    if epoch == 200:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
-
-np.save('RNN Training_Loss_pd_1.npy', training_loss)
-np.save('RNN Validation_Loss_pd_1.npy', validation_loss)

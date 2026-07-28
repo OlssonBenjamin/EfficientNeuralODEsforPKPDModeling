@@ -62,11 +62,6 @@ class SimpleNetwork(nn.Module):
         return final_time_series[:, :]
     
 
-def initialize_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_normal_(m.weight, gain=0.25)
-        m.bias.data.fill_(0)
-
 def load_data(covariate_file, data_file, dose_size, dose_regime_index):
     pk_pd_dataframe = pd.read_csv(data_file)
     cp_response_data = pk_pd_dataframe[['ID', 'time', 'CP', 'RESPONSE']]
@@ -164,7 +159,7 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Saved Models/mlp_pk_1', weights_only=False)
+model = torch.load('Saved Models/mlp_pk_0', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -243,4 +238,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('mlp_pk_dose_size_1',np.array(mse_list))
+np.save('mlp_pk_dose_size_0',np.array(mse_list))

@@ -23,9 +23,9 @@ class SimpleNetwork(nn.Module):
     def __init__(self, num_variables, bottleneck):
        super(SimpleNetwork, self).__init__()
        self.time_func = nn.Sequential(
-           nn.Linear(bottleneck * 2 + 1, 128),
+           nn.Linear(bottleneck * 2 + 1, 32),
            nn.SiLU(),
-           nn.Linear(128, 32),
+           nn.Linear(32, 32),
            nn.SiLU(),
            nn.Linear(32, 1)
        )
@@ -253,7 +253,7 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = SimpleNetwork(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 300
+epochs = 200
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -311,9 +311,9 @@ for epoch in range(epochs):
         print(total_loss.item())
     validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Models/mlp_pd_1')
+        torch.save(model, 'Saved Models/mlp_pd_1')
         best_loss = total_loss.item()
-    if epochs >= 250:
+    if epochs == 15000:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
 np.save('MLP_Training_Loss_pd_1.npy', training_loss)

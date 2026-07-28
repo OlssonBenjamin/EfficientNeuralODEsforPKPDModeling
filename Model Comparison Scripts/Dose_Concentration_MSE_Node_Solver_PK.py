@@ -60,8 +60,8 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='euler', 
-                     options=dict(step_size=1.0)
+       return odeint(self.ode_func, input, t, method='dopri8', 
+                     #options=dict(step_size=1.0)
                      )
 
 class LatentODE(nn.Module):
@@ -123,9 +123,9 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((1, 7, length))
+    all_patient_data = np.zeros((100, 7, length))
 
-    for i in range(1, 2):
+    for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
         all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
@@ -187,7 +187,7 @@ dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
 
-latent_ODE = torch.load('Saved Models/semi_simple_ode_euler_6', weights_only=False)
+latent_ODE = torch.load('Saved Models/node_backprop_solver_pk_3_dopri8_10', weights_only=False)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -257,7 +257,7 @@ for data_loader in val_data_loaders:
         data_tensor = batch[:, 1, :].to(torch.float32)
         if batch[0, 6, 0] == 0:
             dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
-        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze()
+        x_hat = latent_ODE(covariate_input, dose_time_input, full_time_tensor).detach().squeeze().transpose(0,1)
         loss = cost_func(x_hat, data_tensor.squeeze())
         mse_list.append(loss)
             

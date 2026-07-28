@@ -7,7 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
-import random
+
+#Seeds 0 - 4 were used to generate the model
+torch.manual_seed(0)
+np.random.seed(0)
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -63,7 +66,7 @@ class SimpleNetwork(nn.Module):
 
 def initialize_weights(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_normal_(m.weight, gain=0.25)
+        torch.nn.init.uniform_(m.weight, -0.01, 0.01)
         m.bias.data.fill_(0)
 
 def load_data(data_file, covariate_file, dose_size, dose_regime_index):
@@ -250,7 +253,7 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = SimpleNetwork(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 300
+epochs = 200
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
@@ -261,7 +264,6 @@ length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(a
 
 for epoch in range(epochs):
     train_loss = 0
-    random.shuffle(train_dataloaders)
     for train_dataloader in train_dataloaders:
         for batch in train_dataloader:
             optimizer.zero_grad()
@@ -309,10 +311,10 @@ for epoch in range(epochs):
         print(total_loss.item())
     validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Saved Models/mlp_pk_1')
+        torch.save(model, 'Saved Models/mlp_pk_0')
         best_loss = total_loss.item()
-    if epoch == 200:
+    if epoch == 150:
         for param_group in optimizer.param_groups:
             param_group['lr'] = 0.0001 
-np.save('Saved Data/Losses/MLP_Training_Loss_pk_1.npy', training_loss)
-np.save('Saved Data/Losses/MLP_Validation_Loss_pk_1.npy', validation_loss)
+#np.save('Saved Data/Losses/MLP_Training_Loss_pk_1.npy', training_loss)
+#np.save('Saved Data/Losses/MLP_Validation_Loss_pk_1.npy', validation_loss)
