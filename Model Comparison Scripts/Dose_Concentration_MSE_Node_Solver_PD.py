@@ -49,11 +49,16 @@ class ODEFunc(nn.Module):
         dose_input = torch.cat([last_dose, dose_size], dim=1)
         dose_encoding = self.dose_encoding(dose_input)
         ode_input = torch.cat([y0, steering_variables, dose_encoding], dim=1)
-        dzdt = torch.clamp(self.net(ode_input), -50, 50)        
-        mask = (y0 < 0) & (dzdt < 0)
-        dzdt = torch.where(mask, torch.zeros_like(dzdt), dzdt)
+        dzdt = self.net(ode_input)  
+        room_up   = (50.0 - y0) / 50.0           
+        room_down =  y0 / 50.0
+        sign_mask = dzdt > 0 
+        time_mask = last_dose > 24.0 
+        dzdt = torch.where(sign_mask & time_mask, dzdt * room_up, dzdt)  
+        dzdt = torch.where(~sign_mask, dzdt * room_down, dzdt)    
         dzdt = torch.cat([dzdt, torch.zeros_like(steering_variables), torch.zeros_like(dosing_times), torch.zeros_like(dose_size)], dim=1)
         return dzdt
+        
 
 class NeuralODE(nn.Module):
    def __init__(self, ode_func):
@@ -62,7 +67,7 @@ class NeuralODE(nn.Module):
 
    def forward(self, input, t):
        return odeint(self.ode_func, input, t, method='euler', 
-                     options=dict(step_size=0.25)
+                     options=dict(step_size=2.0)
                      )
 
 class LatentODE(nn.Module):
@@ -82,6 +87,7 @@ class LatentODE(nn.Module):
         y0 = torch.zeros(batch_size, 1, dtype=torch.float32) + 50
         encoding = torch.cat([y0, x, dosing_times, input[:, -1].unsqueeze(-1)], dim=1)
         latent_time_series = self.node(encoding, predict_times)
+        latent_time_series = torch.clamp(latent_time_series, 0, 50) 
         return latent_time_series[:, :, 0]
 
 def initialize_weights(m):
@@ -188,8 +194,8 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
-
-latent_ODE = torch.load('node_backprop_solver_pd_0', weights_only=False)
+seed = 5
+latent_ODE = torch.load(f'node_backprop_solver_pd_{seed}_2_150', weights_only=False)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -264,4 +270,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('node_pd_dose_size_0',np.array(mse_list))
+np.save(f'node_pd_dose_size_{seed}_1',np.array(mse_list))

@@ -9,6 +9,10 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 
+seed = 0
+torch.manual_seed(seed)
+np.random.seed(seed)
+
 class PatientDataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -59,13 +63,16 @@ class SimpleNetwork(nn.Module):
                 current_concentration = final_time_series[i - 1, :].unsqueeze(-1)
                 encoding = torch.cat([current_concentration, steering_variables, dose_encoding], dim=1)
                 final_time_series[i, :] = self.time_func(encoding).squeeze()
-        return final_time_series[:, :]
+        return soft_clamp(final_time_series[:, :], 0, 50)
 
 
 def initialize_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_normal_(m.weight, gain=0.25)
         m.bias.data.fill_(0)
+
+def soft_clamp(x, lo, hi):
+    return x + (torch.clamp(x, lo, hi) - x).detach()
 
 def load_data(data_file, covariate_file, dose_size, dose_regime_index):
     pk_pd_dataframe = pd.read_csv(data_file)
@@ -221,15 +228,14 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
-
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 batch_size = 16
 patient_dataset_1 = PatientDataset(all_patient_data_1)
@@ -253,8 +259,9 @@ val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 bottleneck = 16
 model = SimpleNetwork(3, bottleneck)
 model.apply(initialize_weights)
-epochs = 200
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 400
+optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.99)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
@@ -311,10 +318,8 @@ for epoch in range(epochs):
         print(total_loss.item())
     validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Saved Models/mlp_pd_1')
-        best_loss = total_loss.item()
-    if epochs == 15000:
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = 0.0001 
-np.save('MLP_Training_Loss_pd_1.npy', training_loss)
-np.save('MLP_Validation_Loss_pd_1.npy', validation_loss)
+            torch.save(model, f'Saved Models/mlp_pd_{seed}')
+            best_loss = total_loss.item()
+            print("New Best")
+    scheduler.step()
+print(f"Best Loss: {best_loss} using seed: {seed}")

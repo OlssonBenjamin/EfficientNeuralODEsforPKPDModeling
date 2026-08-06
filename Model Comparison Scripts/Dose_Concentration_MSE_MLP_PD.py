@@ -59,8 +59,10 @@ class SimpleNetwork(nn.Module):
                 current_concentration = final_time_series[i - 1, :].unsqueeze(-1)
                 encoding = torch.cat([current_concentration, steering_variables, dose_encoding], dim=1)
                 final_time_series[i, :] = self.time_func(encoding).squeeze()
-        return final_time_series[:, :]
-    
+        return soft_clamp(final_time_series[:, :], 0, 50)
+
+def soft_clamp(x, lo, hi):
+    return x + (torch.clamp(x, lo, hi) - x).detach()
 
 def initialize_weights(m):
     if isinstance(m, nn.Linear):
@@ -164,11 +166,9 @@ dose_size_9  = (dose_size_9 - mean) / std
 dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
+seed = 2
+model = torch.load(f'Saved Models/mlp_pd_{seed}', weights_only=False)
 
-model = torch.load('Models/mlp_pd_1')
-
-num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(num_params)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -245,5 +245,5 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('mlp_pd_dose_size_1',np.array(mse_list))
+np.save(f'mlp_pd_dose_size_{seed}',np.array(mse_list))
 

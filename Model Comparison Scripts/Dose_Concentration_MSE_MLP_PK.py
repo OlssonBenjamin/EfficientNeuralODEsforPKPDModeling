@@ -41,25 +41,25 @@ class SimpleNetwork(nn.Module):
            nn.Linear(32, bottleneck)
        )
     def forward(self, input, dosing_times, predict_times):
-        batch_size = input.size(0)
-        y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
-        final_time_series = torch.zeros((len(predict_times), batch_size))
-        steering_variables = self.patient_encoding(input[:, :-1])
-        for i, times in enumerate(predict_times):
-            if i == 0:
-                continue
-            else:
-                times = times.unsqueeze(0)
-                t_expanded = times.unsqueeze(0).expand((y0.size(0), times.size(0)))
-                mask = (dosing_times <= t_expanded)
-                masked_dosing_times = dosing_times * mask 
-                last_dose = times - masked_dosing_times.max(dim=1, keepdim=True)[0]
-                dose_input = torch.cat([last_dose, input[:, -1].unsqueeze(-1)], dim=1)
-                dose_encoding = self.dose_encoding(dose_input)
-                current_concentration = final_time_series[i - 1, :].unsqueeze(-1)
-                encoding = torch.cat([current_concentration, steering_variables, dose_encoding], dim=1)
-                final_time_series[i, :] = self.time_func(encoding).squeeze()
-        return final_time_series[:, :]
+            batch_size = input.size(0)
+            y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
+            final_time_series = torch.zeros((len(predict_times), batch_size))
+            steering_variables = self.patient_encoding(input[:, :-1])
+            for i, times in enumerate(predict_times):
+                if i == 0:
+                    continue
+                else:
+                    times = times.unsqueeze(0)
+                    t_expanded = times.unsqueeze(0).expand((y0.size(0), times.size(0)))
+                    mask = (dosing_times <= t_expanded)
+                    masked_dosing_times = dosing_times * mask 
+                    last_dose = times - masked_dosing_times.max(dim=1, keepdim=True)[0]
+                    dose_input = torch.cat([last_dose, input[:, -1].unsqueeze(-1)], dim=1)
+                    dose_encoding = self.dose_encoding(dose_input)
+                    current_concentration = final_time_series[i - 1, :].unsqueeze(-1)
+                    encoding = torch.cat([current_concentration, steering_variables, dose_encoding], dim=1)
+                    final_time_series[i, :] = self.time_func(encoding).squeeze()
+            return final_time_series[:, :]
     
 
 def load_data(covariate_file, data_file, dose_size, dose_regime_index):
@@ -159,7 +159,8 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Saved Models/mlp_pk_0', weights_only=False)
+seed = 4
+model = torch.load(f'Saved Models/mlp_pk_{seed}', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -238,4 +239,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('mlp_pk_dose_size_0',np.array(mse_list))
+np.save(f'mlp_pk_dose_size_{seed}',np.array(mse_list))

@@ -24,17 +24,17 @@ class ODEFunc(nn.Module):
    def __init__(self, bottleneck):
        super(ODEFunc, self).__init__()
        self.net = nn.Sequential(
-           nn.Linear(bottleneck * 2 + 1, 32),
-           nn.SiLU(),
-           nn.Linear(32, 32),
-           nn.SiLU(),
-           nn.Linear(32, 1)
-       )
+                  nn.Linear(bottleneck * 2 + 1, 32),
+                  nn.SiLU(),
+                  nn.Linear(32, 32),
+                  nn.SiLU(),
+                  nn.Linear(32, 1)
+        )
        self.dose_encoding = nn.Sequential(
-           nn.Linear(2, 32),
-           nn.SiLU(),
-           nn.Linear(32, bottleneck)
-       )
+                  nn.Linear(2, 16),
+                  nn.SiLU(),
+                  nn.Linear(16, bottleneck)
+        )
 
        self.bottleneck = bottleneck
 
@@ -60,8 +60,8 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='dopri8', 
-                     #options=dict(step_size=1.0)
+       return odeint(self.ode_func, input, t, method='euler',
+                     options=dict(step_size=1.0)
                      )
 
 class LatentODE(nn.Module):
@@ -186,8 +186,8 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 bottleneck = 16
-
-latent_ODE = torch.load('Saved Models/node_backprop_solver_pk_3_dopri8_10', weights_only=False)
+seed = 1
+latent_ODE = torch.load(f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5', weights_only=False)
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -214,6 +214,18 @@ val_patient_dataset_8 = PatientDataset(val_patient_data_8)
 val_patient_dataset_9 = PatientDataset(val_patient_data_9)
 val_patient_dataset_10 = PatientDataset(val_patient_data_10)
 val_patient_dataset_11 = PatientDataset(val_patient_data_11)
+
+""" covariate_rows = [2, 3]  # WT, AGE
+val_data_sets = [val_patient_data_1, val_patient_data_2, val_patient_data_3,
+                 val_patient_data_4, val_patient_data_5, val_patient_data_6,
+                 val_patient_data_7, val_patient_data_8, val_patient_data_9,
+                 val_patient_data_10, val_patient_data_11]
+for row in covariate_rows:
+    train_values = np.concatenate([data[:, row, 0] for data in val_data_sets])
+    mean, std = train_values.mean(), train_values.std()
+    for data in val_data_sets:
+        data[:, row, :] = (data[:, row, :] - mean) / std """
+
 val_dataloader_1 = DataLoader(val_patient_dataset_1, batch_size=val_batch_size, shuffle=False)
 val_dataloader_2 = DataLoader(val_patient_dataset_2, batch_size=val_batch_size, shuffle=False)
 val_dataloader_3 = DataLoader(val_patient_dataset_3, batch_size=val_batch_size, shuffle=False)
@@ -262,4 +274,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('node_pk_dose_size_1',np.array(mse_list))
+np.save(f'node_pk_dose_size_{seed}_rk4_new',np.array(mse_list))

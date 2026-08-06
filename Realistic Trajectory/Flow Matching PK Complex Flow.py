@@ -14,6 +14,9 @@ import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['font.family'] = 'serif'  
 
+seed = 4
+torch.manual_seed(seed)
+np.random.seed(seed)
 def load_parameters_into_model(model, param_vector):
     """
     Given a 1D param_vector sampled from SWAG (or any other method),
@@ -332,25 +335,14 @@ dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv',
-                                                       'Random Data/100_24_5_Random.csv',
-                                                       dose_size_1, 0)
-_, _, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv',
-                                     'Random Data/50_24_10_Random.csv',
-                                     dose_size_2, 1)
-_, _, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv',
-                                     'Random Data/0_24_10_Random.csv',
-                                     dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv',
-                                                       'Random Data/100_24_5_Random.csv',
-    dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv',
-                                     'Random Data/50_24_10_Random.csv',
-    dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv',
-                                     'ZRandom Data/0_24_10_Random.csv',
-    dose_size_3, 2)
+
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
 dose_times_1 = np.zeros(5)
@@ -399,7 +391,7 @@ train_loss_func = torch.nn.MSELoss(reduction='sum')
 training_loss = np.zeros(epochs)
 validation_loss = np.zeros(epochs)
 length_training_data = len(all_patient_data_1) + len(all_patient_data_2) + len(all_patient_data_3)
-swag_tracker = SWAGTracker()
+smooth_time_tensor = torch.linspace(full_time_tensor[0], full_time_tensor[-1], steps = int((full_time_tensor[-1] - full_time_tensor[0])))
 
 for epoch in range(epochs):
     train_loss = 0
@@ -440,10 +432,8 @@ for epoch in range(epochs):
             optimizer.step()
             train_loss += loss
     num = np.random.uniform()
-    if epoch >= 2001 and (num < 0.1):
-        swag_tracker.collect_model(model)
     if epoch == 2000 or best_loss < 0.75:
-        model = torch.load('flow_matching_model_complex_flow_1')
+        model = torch.load(f'flow_matching_model_complex_flow_{seed}', weights_only=False)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=1e-3)
     with torch.no_grad():
         total_loss = 0
@@ -471,7 +461,7 @@ for epoch in range(epochs):
                     if not batch[0, 6, 0] == 2:
                         total_loss += train_loss_func(x_hat, data_tensor) / (25 * 2 * data_tensor.size(-1))
             if total_loss < best_loss:
-                torch.save(model, 'flow_matching_model_complex_flow_1')
+                torch.save(model, f'flow_matching_model_complex_flow_{seed}')
                 best_loss = total_loss
             print(f'Validation Loss: {total_loss.item()}')
                     

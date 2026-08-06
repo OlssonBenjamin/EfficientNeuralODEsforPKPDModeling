@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
-torch.manual_seed(4)
-np.random.seed(4)
+#Seeds used to generate models were 0, 1, 3, 4, 5
+seed = 5
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -46,8 +48,12 @@ class RNN(nn.Module):
             dose_encoding = self.dose_encoding(dose_input)
             net_input = torch.cat([conc_t, steering_variables, dose_encoding], dim=1)
             dconc = self.net(net_input)
-            mask = (conc_t < 0) & (dconc < 0)
-            dconc = torch.where(mask, torch.zeros_like(dconc), dconc)
+            room_up = (50.0 - conc_t) / 50.0
+            room_down = conc_t / 50.0
+            sign_mask = dconc > 0
+            time_mask = last_dose > 24.0
+            dconc = torch.where(sign_mask & time_mask, dconc * room_up, dconc)
+            dconc = torch.where(~sign_mask, dconc * room_down, dconc)
             conc_t = conc_t + dconc
             output_trajectory.append(conc_t.squeeze())
         return torch.stack(output_trajectory, dim=0)
@@ -231,15 +237,14 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
 
-
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
 batch_size = 16
@@ -266,6 +271,7 @@ model = PKPDPredictor(3, bottleneck)
 model.apply(initialize_weights)
 epochs = 300
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.99)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
@@ -301,7 +307,6 @@ for epoch in range(epochs):
             optimizer.step()
     training_loss[epoch] = (train_loss / (length_training_data * len(full_time_tensor))).detach().item()
     with torch.no_grad():
-        model.eval()
         total_loss = 0
         for val_dataloader in val_data_loaders:
             for batch in val_dataloader:
@@ -324,11 +329,8 @@ for epoch in range(epochs):
         print(total_loss.item())
         validation_loss[epoch] = total_loss.item()
     if total_loss.item() < best_loss:
-        torch.save(model, 'Saved Models/rnn_pd_4')
+        torch.save(model, f'Saved Models/rnn_pd_{seed}')
         best_loss = total_loss.item()
-        if total_loss.item() < 12:
-            break
-    model.train()
-    if epoch == 200:
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = 0.0001 
+        print("New Best")
+    scheduler.step()
+print(f"Best Loss: {best_loss} using seed: {seed}")

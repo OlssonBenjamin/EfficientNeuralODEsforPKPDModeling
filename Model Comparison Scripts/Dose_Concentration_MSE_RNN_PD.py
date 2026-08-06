@@ -48,8 +48,12 @@ class RNN(nn.Module):
             dose_encoding = self.dose_encoding(dose_input)
             net_input = torch.cat([conc_t, steering_variables, dose_encoding], dim=1)
             dconc = self.net(net_input)
-            mask = (conc_t < 0) & (dconc < 0)
-            dconc = torch.where(mask, torch.zeros_like(dconc), dconc)
+            room_up = (50.0 - conc_t) / 50.0
+            room_down = conc_t / 50.0
+            sign_mask = dconc > 0
+            time_mask = last_dose > 24.0
+            dconc = torch.where(sign_mask & time_mask, dconc * room_up, dconc)
+            dconc = torch.where(~sign_mask, dconc * room_down, dconc)
             conc_t = conc_t + dconc
             output_trajectory.append(conc_t.squeeze())
         return torch.stack(output_trajectory, dim=0)
@@ -178,7 +182,8 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-model = torch.load('Saved Models/rnn_pd_4', weights_only=False)
+seed = 4
+model = torch.load(f'Saved Models/rnn_pd_{seed}', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -257,4 +262,4 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('rnn_pd_dose_size_4',np.array(mse_list))
+np.save(f'rnn_pd_dose_size_{seed}',np.array(mse_list))

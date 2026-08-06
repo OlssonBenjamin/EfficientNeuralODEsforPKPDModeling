@@ -9,9 +9,9 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 
-#Seeds 0 - 4 were used to generate the models
-torch.manual_seed(4)
-np.random.seed(4)
+seed = 5
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -63,8 +63,8 @@ class NeuralODE(nn.Module):
        self.ode_func = ode_func
 
    def forward(self, input, t):
-       return odeint(self.ode_func, input, t, method='dopri5',
-                     #options=dict(step_size=1.0)
+       return odeint(self.ode_func, input, t, method='euler',
+                     options=dict(step_size=1.0)
                      )
 
 class LatentODE(nn.Module):
@@ -230,14 +230,23 @@ dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
+
+""" covariate_rows = [2, 3]  # WT, AGE
+train_data_sets = [all_patient_data_1, all_patient_data_2, all_patient_data_3]
+val_data_sets = [val_patient_data_1, val_patient_data_2, val_patient_data_3]
+for row in covariate_rows:
+    train_values = np.concatenate([data[:, row, 0] for data in train_data_sets])
+    mean, std = train_values.mean(), train_values.std()
+    for data in train_data_sets + val_data_sets:
+        data[:, row, :] = (data[:, row, :] - mean) / std """
 
 dose_times_1 = np.zeros(5)
 dose_times_2 = np.zeros(10)
@@ -278,7 +287,7 @@ node = NeuralODE(ode_func)
 model = LatentODE(3, node, bottleneck)
 model.apply(initialize_weights)
 epochs = 300
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
@@ -308,7 +317,6 @@ for epoch in range(epochs):
                     dose_time_input = None
             x_hat = model(covariate_input, dose_time_input, full_time_tensor)[mask].transpose(0, 1)
             if torch.isnan(x_hat).any() or torch.isinf(x_hat).any():
-                train_loss += 100
                 x_hat = torch.nan_to_num(x_hat, nan=1e4, posinf=1e4, neginf=-1e4)
             train_loss += train_loss_func(x_hat, data_tensor)
             loss = cost_func(x_hat, data_tensor)
@@ -339,15 +347,22 @@ for epoch in range(epochs):
                         dose_time_input = None
                 x_hat = model(covariate_input, dose_time_input, full_time_tensor)[mask].transpose(0, 1)
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
+        if torch.isnan(x_hat).any() or torch.isinf(x_hat).any() or total_loss > 100:
+                checkpoint = torch.load(f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5', weights_only=False)
+                model.load_state_dict(checkpoint.state_dict())
+                optimizer.state.clear()
+                continue
         print(total_loss.item())
         validation_loss[epoch] = total_loss
     #np.save('Saved Data/Losses/node_bps_Training_Loss_pk_1.npy', training_loss)
     #np.save('Saved Data/Losses/node_bps_Validation_Loss_pk_1.npy', validation_loss)
     if total_loss.item() < best_loss:
-        torch.save(model, 'Saved Models/node_backprop_solver_pk_4_dopri')
+        torch.save(model, f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5')
         best_loss = total_loss.item()
-    if epoch == 250:
+        print("New Best")
+    if epoch == 200:
         for param_group in optimizer.param_groups:
-            param_group['lr'] = 0.0005 
+            param_group['lr'] = 0.0001 
+print(f'Best Loss: {best_loss} with seed: {seed}')
 
 

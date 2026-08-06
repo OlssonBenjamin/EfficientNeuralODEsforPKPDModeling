@@ -35,11 +35,12 @@ class RNN(nn.Module):
             nn.Linear(32, bottleneck)
         )
         self.bottleneck = bottleneck
+        self.dose_interval = 24.0
     
     def forward(self, initial_conc, steering_variables, dosing_times, time_steps, dose_size):
         conc_t = initial_conc.clone()
         output_trajectory = [conc_t.squeeze()]
-        for t in time_steps[:-1]:
+        for i, t in enumerate(time_steps[:-1]):
             t_expanded = t.unsqueeze(0).expand(dosing_times.shape)
             mask = (dosing_times <= t_expanded)
             masked_dosing_times = dosing_times * mask
@@ -67,7 +68,7 @@ class PKPDPredictor(nn.Module):
         y0 = torch.zeros(batch_size, 1, dtype=torch.float32)
         steering_variables = self.patient_encoding(input[:, :-1])
         time_series = self.rnn(y0, steering_variables, dosing_times, predict_times, input[:, -1].unsqueeze(-1))
-        return torch.abs(time_series)
+        return time_series
     
 def prepare_initial_input(batch_size, sequence_length):
     return torch.zeros(batch_size, sequence_length, 1)  # Start with zeros or any initial value
@@ -174,8 +175,8 @@ dose_size_9  = (dose_size_9 - mean) / std
 dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
-
-model = torch.load('Saved Models/rnn_pk_3_300', weights_only=False)
+seed = 4
+model = torch.load(f'Saved Models/rnn_pk_{seed}_new', weights_only=False)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -254,5 +255,5 @@ for data_loader in val_data_loaders:
         mse_list.append(loss)
             
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save('rnn_pk_dose_size_3_300',np.array(mse_list))
+np.save(f'rnn_pk_dose_size_{seed}_new',np.array(mse_list))
 

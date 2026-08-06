@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
-torch.manual_seed(3)
-np.random.seed(3)
+seed = 4
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 class PatientDataset(Dataset):
     def __init__(self, data):
@@ -37,7 +38,7 @@ class RNN(nn.Module):
     def forward(self, initial_conc, steering_variables, dosing_times, time_steps, dose_size):
         conc_t = initial_conc.clone()
         output_trajectory = [conc_t.squeeze()]
-        for t in time_steps[:-1]:
+        for i, t in enumerate(time_steps[:-1]):
             t_expanded = t.unsqueeze(0).expand(dosing_times.shape)
             mask = (dosing_times <= t_expanded)
             masked_dosing_times = dosing_times * mask
@@ -227,14 +228,14 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2)
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
 
 
 batch_size = 16
@@ -260,7 +261,7 @@ bottleneck = 16
 model = PKPDPredictor(3, bottleneck)
 model.apply(initialize_weights)
 epochs = 300
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0075)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 best_loss = np.inf
 cost_func = torch.nn.MSELoss()
 train_loss_func = torch.nn.MSELoss(reduction='sum')
@@ -316,13 +317,19 @@ for epoch in range(epochs):
                 x_hat = model(covariate_input, dose_time_input, full_time_tensor)[mask].transpose(0, 1)
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         print(total_loss.item())
+        if torch.isnan(x_hat).any() or torch.isinf(x_hat).any() or total_loss > 100:
+            checkpoint = torch.load(f'Saved Models/rnn_pk_{seed}_new', weights_only=False)
+            model.load_state_dict(checkpoint.state_dict())
+            optimizer.state.clear()
+            continue
         validation_loss[epoch] = total_loss
     if total_loss.item() < best_loss:
-        torch.save(model, 'Saved Models/rnn_pk_3_300' 
+        torch.save(model, f'Saved Models/rnn_pk_{seed}_new' 
         '')
         best_loss = total_loss.item()
     if epoch == 200:
         for param_group in optimizer.param_groups:
-            param_group['lr'] = 0.00075 
+            param_group['lr'] = 0.0001 
+print(f'Best Loss: {best_loss} with seed: {seed}')
 #np.save('RNN Training_Loss_1.npy', training_loss)
 #np.save('RNN Validation_Loss_1.npy', validation_loss)
