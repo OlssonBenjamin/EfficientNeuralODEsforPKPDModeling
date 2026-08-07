@@ -9,7 +9,8 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import random
 
-seed = 5
+#Seeds 0, 1, 2, 3, 4 were used to generate the models
+seed = 0
 torch.manual_seed(seed)
 np.random.seed(seed)
 
@@ -230,23 +231,13 @@ dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2)
 
-
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
-
-""" covariate_rows = [2, 3]  # WT, AGE
-train_data_sets = [all_patient_data_1, all_patient_data_2, all_patient_data_3]
-val_data_sets = [val_patient_data_1, val_patient_data_2, val_patient_data_3]
-for row in covariate_rows:
-    train_values = np.concatenate([data[:, row, 0] for data in train_data_sets])
-    mean, std = train_values.mean(), train_values.std()
-    for data in train_data_sets + val_data_sets:
-        data[:, row, :] = (data[:, row, :] - mean) / std """
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2)
 
 dose_times_1 = np.zeros(5)
 dose_times_2 = np.zeros(10)
@@ -348,16 +339,14 @@ for epoch in range(epochs):
                 x_hat = model(covariate_input, dose_time_input, full_time_tensor)[mask].transpose(0, 1)
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         if torch.isnan(x_hat).any() or torch.isinf(x_hat).any() or total_loss > 100:
-                checkpoint = torch.load(f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5', weights_only=False)
-                model.load_state_dict(checkpoint.state_dict())
+                checkpoint = torch.load(f'Saved Weights/node_backprop_solver_pk_{seed}', weights_only=True)
+                model.load_state_dict(checkpoint)
                 optimizer.state.clear()
                 continue
         print(total_loss.item())
         validation_loss[epoch] = total_loss
-    #np.save('Saved Data/Losses/node_bps_Training_Loss_pk_1.npy', training_loss)
-    #np.save('Saved Data/Losses/node_bps_Validation_Loss_pk_1.npy', validation_loss)
     if total_loss.item() < best_loss:
-        torch.save(model, f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5')
+        torch.save(model.state_dict(), f'Saved Weights/node_backprop_solver_pk_{seed}')
         best_loss = total_loss.item()
         print("New Best")
     if epoch == 200:

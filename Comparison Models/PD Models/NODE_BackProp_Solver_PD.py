@@ -240,14 +240,13 @@ dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
 dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
 
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2)
 
-
-val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Random Data/PK_PD_100_24_10_100_1.csv', 'Random Data/100_24_10_100_1.csv', dose_size_1, 0)
-val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Random Data/PK_PD_50_24_10_100_1.csv', 'Random Data/50_24_10_100_1.csv', dose_size_2, 1)
-val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Random Data/PK_PD_0_24_10_100_1.csv', 'Random Data/0_24_10_100_1.csv', dose_size_3, 2)
+val_time_tensor_1, val_mask_1, val_patient_data_1 = load_validation_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0)
+val_time_tensor_2, val_mask_2, val_patient_data_2 = load_validation_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1)
+val_time_tensor_3, val_mask_3, val_patient_data_3 = load_validation_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2)
 
 
 dose_times_1 = np.zeros(5)
@@ -347,10 +346,8 @@ for epoch in range(epochs):
                 total_loss += train_loss_func(x_hat, data_tensor) / (val_batch_size * len(train_dataloaders) * len(full_time_tensor))
         print(total_loss.item())
         validation_loss[epoch] = total_loss
-    #np.save('Node Training_Loss_pd_2.npy', training_loss)
-    #np.save('Node Validation_Loss_pd_2.npy', validation_loss)
     if total_loss.item() < best_loss:
-        torch.save(model, f'node_backprop_solver_pd_{seed}_2_150')
+        torch.save(model.state_dict(), f'Saved Weights/node_backprop_solver_pd_{seed}')
         best_loss = total_loss.item()
         print("New Best")
     scheduler.step()

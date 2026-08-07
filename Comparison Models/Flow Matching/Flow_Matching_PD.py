@@ -9,6 +9,7 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import copy
 
+seed = 0
 def load_parameters_into_model(model, param_vector):
     """
     Given a 1D param_vector,
@@ -561,16 +562,18 @@ for i in range(5, 10):
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 dose_times_2 = torch.tensor(dose_times_2, dtype=torch.float32)
 
-pk_model = torch.load('flow_matching_model_1')
-
-all_patient_data_1, cp_predictions_1 = load_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0, pk_model, dose_times_1)
-all_patient_data_2, cp_predictions_2 = load_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1, pk_model, dose_times_2)
-all_patient_data_3, cp_predictions_3 = load_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2, pk_model, dose_times_1)
+bottleneck = 4
+pk_model = TrainODE(3, bottleneck, dose_size_3)
+pk_model.load_state_dict(torch.load(f'Saved Weights/flow_matching_model_{seed}', weights_only=True))
 
 
-val_patient_data_1, val_cp_predictions_1 = load_validation_data('Random Data/PKPD_100_24_5_Random.csv', 'Random Data/100_24_5_Random.csv', dose_size_1, 0, pk_model, dose_times_1)
-val_patient_data_2, val_cp_predictions_2 = load_validation_data('Random Data/PKPD_50_24_10_Random.csv', 'Random Data/50_24_10_Random.csv', dose_size_2, 1, pk_model, dose_times_2)
-val_patient_data_3, val_cp_predictions_3 = load_validation_data('Random Data/PKPD_0_24_10_Random.csv', 'Random Data/0_24_10_Random.csv', dose_size_3, 2, pk_model, dose_times_1)
+all_patient_data_1, cp_predictions_1 = load_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0, pk_model, dose_times_1)
+all_patient_data_2, cp_predictions_2  = load_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1, pk_model, dose_times_2)
+all_patient_data_3, cp_predictions_3 = load_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2, pk_model, dose_times_1)
+
+val_patient_data_1, val_cp_predictions_1 = load_validation_data('Training Data/PK_PD_100_24_5_100_WT_AGE_SEX.csv', 'Training Data/100_24_5_100_WT_AGE_SEX.csv', dose_size_1, 0, pk_model, dose_times_1)
+val_patient_data_2, val_cp_predictions_2 = load_validation_data('Training Data/PK_PD_50_24_10_100_WT_AGE_SEX.csv', 'Training Data/50_24_10_100_WT_AGE_SEX.csv', dose_size_2, 1, pk_model, dose_times_2)
+val_patient_data_3, val_cp_predictions_3 = load_validation_data('Training Data/PK_PD_0_24_10_100_WT_AGE_SEX.csv', 'Training Data/0_24_10_100_WT_AGE_SEX.csv', dose_size_3, 2, pk_model, dose_times_1)
 
 batch_size = 8
 patient_dataset_1 = PatientDataset(all_patient_data_1, cp_predictions_1)
@@ -592,7 +595,6 @@ val_dataloader_3 = DataLoader(val_patient_dataset_3, batch_size=val_batch_size, 
 train_dataloaders = [dataloader_1, dataloader_2, dataloader_3]
 val_data_loaders = [val_dataloader_1, val_dataloader_2, val_dataloader_3]
 
-bottleneck = 4
 model = PKPD(3, bottleneck, dose_size_3)
 model.apply(initialize_weights)
 epochs = 4001
@@ -700,4 +702,4 @@ for epoch in range(epochs):
             print(f'Validation Loss: {total_loss.item()}')
             if total_loss.item() < best_loss:
                 best_loss = total_loss.item()
-                torch.save(model, 'flow_matching_pkpd_concentration_1')
+                torch.save(model.state_dict(), f'Saved Weights/flow_matching_pkpd_concentration_{seed}')

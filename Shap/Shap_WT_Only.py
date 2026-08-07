@@ -70,7 +70,7 @@ class LatentODE(nn.Module):
         latent_time_series = self.node(encoding, predict_times)
         return latent_time_series[:, :, 0]
 
-def load_data(covariate_file, data_file, dose_size, dose_regime_index):
+def load_data(data_file, covariate_file, dose_size, dose_regime_index):
     pk_pd_dataframe = pd.read_csv(data_file)
     cp_response_data = pk_pd_dataframe[['ID', 'time', 'CP', 'RESPONSE']]
     grouped_data = cp_response_data.groupby('ID')
@@ -104,9 +104,9 @@ def load_data(covariate_file, data_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((75, 7, length))
+    all_patient_data = np.zeros((100, 7, length))
 
-    for i in range(1, 76):
+    for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
         all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
@@ -157,13 +157,9 @@ dose_size_3 = 0
 
 dose_sizes = np.array([100, 50, 0])
 
-dose_size_1  = (dose_size_1 - np.mean(dose_sizes)) / np.std(dose_sizes)
-dose_size_2  = (dose_size_2 - np.mean(dose_sizes)) / np.std(dose_sizes)
-dose_size_3  = (dose_size_3 - np.mean(dose_sizes)) / np.std(dose_sizes)
-
-full_time_tensor, mask, all_patient_data_1 = load_data('Random Data/PK_PD_100_24_5_100_WT.csv', 'Random Data/100_24_5_100_WT.csv', dose_size_1, 0)
-full_time_tensor, mask, all_patient_data_2 = load_data('Random Data/PK_PD_50_24_10_100_WT.csv', 'Random Data/50_24_10_100_WT.csv', dose_size_2, 1)
-full_time_tensor, mask, all_patient_data_3 = load_data('Random Data/PK_PD_0_24_10_100_WT.csv', 'Random Data/0_24_10_100_WT.csv', dose_size_3, 2)
+full_time_tensor, mask, all_patient_data_1 = load_data('Training Data/PK_PD_100_24_5_100_WT.csv', 'Training Data/100_24_5_100_WT.csv', dose_size_1, 0)
+full_time_tensor, mask, all_patient_data_2 = load_data('Training Data/PK_PD_50_24_10_100_WT.csv', 'Training Data/50_24_10_100_WT.csv', dose_size_2, 1)
+full_time_tensor, mask, all_patient_data_3 = load_data('Training Data/PK_PD_0_24_10_100_WT.csv', 'Training Data/0_24_10_100_WT.csv', dose_size_3, 2)
 
 last_dose = torch.tensor(0.0, dtype=torch.float32).expand([225, 1])
 current_concentration = torch.tensor(0.0, dtype=torch.float32).expand([225, 1])
@@ -181,7 +177,10 @@ column_names = ['Weight', 'Age', 'Sex', 'Dose Size', 'Last Dose', 'Current Conce
 
 df = pd.DataFrame(input, columns=column_names)
 seed = 0
-model = torch.load(f'Saved Models/node_backprop_solver_pk_{seed}_wt_only', weights_only=False)
+bottleneck = 16
+node = NeuralODE(ODEFunc(bottleneck))
+model = LatentODE(3, node, bottleneck)
+model.load_state_dict(torch.load(f'Saved Weights/node_backprop_solver_pk_{seed}_wt_only', weights_only=True))
 
 patient_encoding_network = model.patient_encoding
 dose_encoding_network = model.node.ode_func.dose_encoding

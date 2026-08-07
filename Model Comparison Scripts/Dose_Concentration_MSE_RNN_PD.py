@@ -78,11 +78,6 @@ class PKPDPredictor(nn.Module):
 def prepare_initial_input(batch_size, sequence_length):
     return torch.zeros(batch_size, sequence_length, 1)  # Start with zeros or any initial value
 
-def initialize_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_normal_(m.weight, gain=0.25)
-        m.bias.data.fill_(0)
-
 def load_data(covariate_file, data_file, dose_size, dose_regime_index):
     pk_pd_dataframe = pd.read_csv(data_file)
     cp_response_data = pk_pd_dataframe[['ID', 'time', 'CP', 'RESPONSE']]
@@ -182,10 +177,8 @@ dose_size_10  = (dose_size_10 - mean) / std
 dose_size_11  = (dose_size_11 - mean) / std
 
 
-seed = 4
-model = torch.load(f'Saved Models/rnn_pd_{seed}', weights_only=False)
-
-num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+seeds = [0, 1, 3, 4, 5]
+bottleneck = 16
 
 full_time_tensor, val_mask, val_patient_data_1 = load_data('Dose Size Data/0_24_8_100.csv', 'Dose Size Data/PK_PD_0_24_8_100.csv', dose_size_1, 0)
 full_time_tensor, val_mask, val_patient_data_2 = load_data('Dose Size Data/25_24_8_100.csv', 'Dose Size Data/PK_PD_25_24_8_100.csv', dose_size_2, 0)
@@ -245,21 +238,25 @@ for i in range(1, 9):
 
 dose_times_1 = torch.tensor(dose_times_1, dtype=torch.float32)
 
-mse_list = []
-model.eval()
 cost_func = torch.nn.MSELoss()
-for data_loader in val_data_loaders:
-    for batch in data_loader:
-        covariate_input = batch[:, 2:6, 0]
-        covariate_input = covariate_input.to(torch.float32)
-        data_tensor = batch[:, 1, :].to(torch.float32)
-        if batch[0, 6, 0] == 0:
-            dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
-        x_hat = model(covariate_input, dose_time_input, full_time_tensor)
-        x_hat = x_hat[val_mask].transpose(1,0)
-        x_hat = x_hat.detach().squeeze()
-        loss = cost_func(x_hat, data_tensor)
-        mse_list.append(loss)
-            
 concentration_list = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250]
-np.save(f'rnn_pd_dose_size_{seed}',np.array(mse_list))
+
+for seed in seeds:
+    mse_list = []
+    model = PKPDPredictor(3, bottleneck)
+    model.load_state_dict(torch.load(f'Saved Weights/rnn_pd_{seed}', weights_only=True))
+    model.eval()
+    for data_loader in val_data_loaders:
+        for batch in data_loader:
+            covariate_input = batch[:, 2:6, 0]
+            covariate_input = covariate_input.to(torch.float32)
+            data_tensor = batch[:, 1, :].to(torch.float32)
+            if batch[0, 6, 0] == 0:
+                dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1))).reshape((batch.size(0), len(dose_times_1)))
+            x_hat = model(covariate_input, dose_time_input, full_time_tensor)
+            x_hat = x_hat[val_mask].transpose(1,0)
+            x_hat = x_hat.detach().squeeze()
+            loss = cost_func(x_hat, data_tensor)
+            mse_list.append(loss)
+
+    np.save(f'Evaluation Results/rnn_pd_dose_size_{seed}',np.array(mse_list))

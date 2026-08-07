@@ -104,9 +104,9 @@ def load_data(data_file, covariate_file, dose_size, dose_regime_index):
 
     length = len(individual_patient_data[1]['time'])
 
-    all_patient_data = np.zeros((75, 7, length))
+    all_patient_data = np.zeros((100, 7, length))
 
-    for i in range(1, 76):
+    for i in range(1, 101):
         all_patient_data[i - 1, 0, :] = individual_patient_data[i]['time']
         all_patient_data[i - 1, 1, :] = individual_patient_data[i]['CP']
         all_patient_data[i - 1, 2, :] = individual_patient_covariate_data[i]['WT']
@@ -181,7 +181,10 @@ column_names = ['Weight', 'Age', 'Sex', 'Dose Size', 'Last Dose', 'Current Conce
 
 df = pd.DataFrame(input, columns=column_names)
 seed = 0
-model = torch.load(f'Saved Models/node_backprop_solver_pk_{seed}_euler_new_1_5', weights_only=False)
+bottleneck = 16
+node = NeuralODE(ODEFunc(bottleneck))
+model = LatentODE(3, node, bottleneck)
+model.load_state_dict(torch.load(f'Saved Weights/node_backprop_solver_pk_{seed}', weights_only=True))
 
 patient_encoding_network = model.patient_encoding
 dose_encoding_network = model.node.ode_func.dose_encoding

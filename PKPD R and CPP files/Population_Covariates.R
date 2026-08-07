@@ -5,10 +5,10 @@ library(dplyr)
 library(dmutate)
 
 mod <- mread('PKPD R and CPP files/pkpd_covariates')
-set.seed(100)
-mod <- mread("PKPD R and CPP files/pkpd_covariates") %>%
-  omat(list(cmat(0.1, 0.8, 0.3),dmat(0.5)))
-mod
+set.seed(1000)
+#mod <- mread("PKPD R and CPP files/pkpd_covariates") %>%
+#  omat(list(cmat(0.1, 0.8, 0.3),dmat(0.5)))
+#mod
 
 rtnorm <- function(n, mu, sigma, lo, hi) {
   x <- numeric(n)
@@ -27,7 +27,7 @@ idata <- tibble(ID=1:100) %>%
 
 
 out <- mod %>% param(TLAG=0) %>%
-  ev(amt=250, ii=24, addl=8) %>%
+  ev(amt=75, ii=24, addl=14) %>%
   idata_set(idata) %>%
   mrgsim(delta=0.1, end=408)
 
@@ -36,6 +36,6 @@ plot(out, CP + RESPONSE~.,)
 
 out_df = as.data.frame(out)
 covariates_df = as.data.frame(idata)
-write.csv(covariates_df, 'Dose Size Data/250_24_8_100_r.csv')
-write.csv(out_df, 'Dose Size Data/PK_PD_250_24_8_100_r.csv')
+write.csv(covariates_df, 'Num Dose Data/75_24_15.csv')
+write.csv(out_df, 'Num Dose Data/PKPD_75_24_15.csv')
 

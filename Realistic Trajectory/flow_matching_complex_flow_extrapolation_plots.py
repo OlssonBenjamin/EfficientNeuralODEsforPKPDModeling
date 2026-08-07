@@ -324,7 +324,7 @@ for val_dataloader in val_data_loaders:
                     data_tensor = batch[:, 2, :].to(torch.float32)
                     dose_time_input = dose_times_1.expand((batch.size(0), len(dose_times_1)))
                     x_hat = model.solve(covariate_input, dose_time_input, smooth_time_tensor).transpose(0, 1).squeeze()
-                    for z in range(25):
+                    for z in range(24, 25):
                         fig, ax = plt.subplots(figsize=(10, 5))
 
                         # --- Style ---
@@ -379,6 +379,6 @@ for val_dataloader in val_data_loaders:
                         )
 
                         plt.tight_layout()
-                        plt.savefig(f'Realistic Trajectory/Plots/Test_Data_Extrapolation{z}.pdf',  bbox_inches='tight', facecolor=fig.get_facecolor()) 
+                        plt.savefig(f'Figures/Realistic_Trajectory.pdf',  bbox_inches='tight', facecolor=fig.get_facecolor()) 
 
         
